@@ -3,7 +3,7 @@
  * Plugin Name: Nextcloud WooCommerce Integration
  * Plugin URI: https://github.com/miransweb/nextcloud-woo-integration/
  * Description: Integreert Nextcloud accounts met WooCommerce subscriptions
- * Version: 2.1.3
+ * Version: 2.1.4
  * Author: Miran
  * Text Domain: nc-woo-integration
  * Requires PHP: 7.4
@@ -16,7 +16,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('NCWI_VERSION', '2.1.3');
+define('NCWI_VERSION', '2.1.4');
 define('NCWI_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('NCWI_PLUGIN_URL', plugin_dir_url(__FILE__));
 
