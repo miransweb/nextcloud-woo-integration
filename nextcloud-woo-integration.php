@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name: Nextcloud WooCommerce Integration
- * Plugin URI: https://miransweb.com
+ * Plugin URI: https://github.com/miransweb/nextcloud-woo-integration/
  * Description: Integreert Nextcloud accounts met WooCommerce subscriptions
  * Version: 2.1.3
  * Author: Miran
@@ -48,6 +48,8 @@ class Nextcloud_Woo_Integration {
         require_once NCWI_PLUGIN_DIR . 'includes/class-ncwi-ajax.php';
         require_once NCWI_PLUGIN_DIR . 'includes/class-ncwi-signup.php';
         require_once NCWI_PLUGIN_DIR . 'includes/class-ncwi-updater.php';
+        require_once NCWI_PLUGIN_DIR . 'includes/class-ncwi-checkout-integration.php';
+        require_once NCWI_PLUGIN_DIR . 'includes/class-ncwi-purchase-handler.php';
     }
     
     private function define_hooks() {
@@ -76,6 +78,8 @@ class Nextcloud_Woo_Integration {
         NCWI_Security::get_instance();
         NCWI_Ajax::get_instance();
         NCWI_Signup::get_instance();
+        NCWI_Checkout_Integration::get_instance();
+        NCWI_Purchase_Handler::get_instance();
     if (is_admin()) {
         new NCWI_Updater(__FILE__); 
     }

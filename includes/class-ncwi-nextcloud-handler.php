@@ -28,6 +28,8 @@ class NCWI_Nextcloud_Handler {
         
         // Shortcode for signup with NC data
         add_shortcode('nextcloud_signup_handler', [$this, 'render_signup_handler']);
+        // Hook voor redirect na login
+    add_action('wp_login', [$this, 'check_nextcloud_redirect_after_login'], 10, 2);
     }
     
     /**
@@ -74,12 +76,32 @@ class NCWI_Nextcloud_Handler {
             // Go to subscription management
             wp_redirect(wc_get_account_endpoint_url('subscriptions'));
             exit;
-        } else {
-            // Continue with signup/login flow
-            $this->process_nextcloud_user();
-        }
+        } elseif ($action === 'subscribe') {
+        // Trial gebruiker - ga direct naar productpagina
+        // WooCommerce handelt login/registratie af tijdens checkout
+        wp_redirect(home_url('/product/personalstorage-subscription/'));
+        exit;
+    } else {
+        // Als manage maar niet ingelogd, stuur naar login
+        wp_redirect(wc_get_page_permalink('myaccount'));
+        exit;
+    }
     }
     
+  public function check_nextcloud_redirect_after_login($user_login, $user) {
+    if (!session_id()) {
+        session_start();
+    }
+    
+    $nc_data = $_SESSION['ncwi_nextcloud_data'] ?? null;
+    
+    if ($nc_data && $nc_data['action'] === 'manage') {
+        // Na login voor manage actie, redirect naar subscriptions
+        wp_redirect(wc_get_account_endpoint_url('subscriptions'));
+        exit;
+    }
+}
+
     /**
      * Process Nextcloud user
      */
