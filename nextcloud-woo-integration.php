@@ -3,7 +3,7 @@
  * Plugin Name: Nextcloud WooCommerce Integration
  * Plugin URI: https://miransweb.com
  * Description: Integreert Nextcloud accounts met WooCommerce subscriptions
- * Version: 2.1.0
+ * Version: 2.1.3
  * Author: Miran
  * Text Domain: nc-woo-integration
  * Requires PHP: 7.4
@@ -16,7 +16,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('NCWI_VERSION', '2.0.0');
+define('NCWI_VERSION', '2.1.3');
 define('NCWI_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('NCWI_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -47,6 +47,7 @@ class Nextcloud_Woo_Integration {
         require_once NCWI_PLUGIN_DIR . 'includes/class-ncwi-security.php';
         require_once NCWI_PLUGIN_DIR . 'includes/class-ncwi-ajax.php';
         require_once NCWI_PLUGIN_DIR . 'includes/class-ncwi-signup.php';
+        require_once NCWI_PLUGIN_DIR . 'includes/class-ncwi-updater.php';
     }
     
     private function define_hooks() {
@@ -75,7 +76,10 @@ class Nextcloud_Woo_Integration {
         NCWI_Security::get_instance();
         NCWI_Ajax::get_instance();
         NCWI_Signup::get_instance();
+    if (is_admin()) {
+        new NCWI_Updater(__FILE__); 
     }
+}
     
     public function enqueue_scripts() {
         // Existing account page scripts
@@ -237,6 +241,14 @@ class Nextcloud_Woo_Integration {
         add_option('ncwi_sync_interval', 'hourly');
     }
 }
+
+// Enable auto-updates for this plugin
+add_filter('auto_update_plugin', function($update, $item) {
+    if (isset($item->slug) && $item->slug === 'nextcloud-woo-integration') {
+        return true;
+    }
+    return $update;
+}, 10, 2);
 
 // Initialize the plugin
 function ncwi_init() {

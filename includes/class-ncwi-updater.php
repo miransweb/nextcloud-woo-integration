@@ -219,7 +219,3 @@ class NCWI_Updater {
     }
 }
 
-// Initialize updater
-if (is_admin()) {
-    new NCWI_Updater(__FILE__);
-}
