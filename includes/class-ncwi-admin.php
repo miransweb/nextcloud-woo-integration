@@ -532,9 +532,9 @@ class NCWI_Admin {
         $validation = $api->validate_configuration();
         
         if (is_wp_error($validation)) {
-            echo '<p class="ncwi-status-error">❌ ' . __('Niet geconfigureerd', 'nc-woo-integration') . '</p>';
+            echo '<p class="ncwi-status-error">ERROR: ' . __('Niet geconfigureerd', 'nc-woo-integration') . '</p>';
         } else {
-            echo '<p class="ncwi-status-success">✅ ' . __('Verbonden', 'nc-woo-integration') . '</p>';
+            echo '<p class="ncwi-status-success">OK ' . __('Verbonden', 'nc-woo-integration') . '</p>';
         }
         
         // Display some stats

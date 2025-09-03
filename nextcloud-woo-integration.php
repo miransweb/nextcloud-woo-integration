@@ -3,7 +3,7 @@
  * Plugin Name: Nextcloud WooCommerce Integration
  * Plugin URI: https://github.com/miransweb/nextcloud-woo-integration/
  * Description: Integreert Nextcloud accounts met WooCommerce subscriptions
- * Version: 2.1.3
+ * Version: 2.1.4
  * Author: Miran
  * Text Domain: nc-woo-integration
  * Requires PHP: 7.4
@@ -16,7 +16,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('NCWI_VERSION', '2.1.3');
+define('NCWI_VERSION', '2.1.4');
 define('NCWI_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('NCWI_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -39,17 +39,18 @@ class Nextcloud_Woo_Integration {
     
     private function load_dependencies() {
         // Core classes
-        require_once NCWI_PLUGIN_DIR . 'includes/class-ncwi-api.php';
-        require_once NCWI_PLUGIN_DIR . 'includes/class-ncwi-account-manager.php';
-        require_once NCWI_PLUGIN_DIR . 'includes/class-ncwi-subscription-handler.php';
-        require_once NCWI_PLUGIN_DIR . 'includes/class-ncwi-my-account.php';
-        require_once NCWI_PLUGIN_DIR . 'includes/class-ncwi-admin.php';
-        require_once NCWI_PLUGIN_DIR . 'includes/class-ncwi-security.php';
-        require_once NCWI_PLUGIN_DIR . 'includes/class-ncwi-ajax.php';
-        require_once NCWI_PLUGIN_DIR . 'includes/class-ncwi-signup.php';
-        require_once NCWI_PLUGIN_DIR . 'includes/class-ncwi-updater.php';
-        require_once NCWI_PLUGIN_DIR . 'includes/class-ncwi-checkout-integration.php';
-        require_once NCWI_PLUGIN_DIR . 'includes/class-ncwi-purchase-handler.php';
+    require_once NCWI_PLUGIN_DIR . 'includes/class-ncwi-api.php';
+    require_once NCWI_PLUGIN_DIR . 'includes/class-ncwi-account-manager.php';
+    require_once NCWI_PLUGIN_DIR . 'includes/class-ncwi-subscription-handler.php';
+    require_once NCWI_PLUGIN_DIR . 'includes/class-ncwi-my-account.php';
+    require_once NCWI_PLUGIN_DIR . 'includes/class-ncwi-admin.php';
+    require_once NCWI_PLUGIN_DIR . 'includes/class-ncwi-security.php';
+    require_once NCWI_PLUGIN_DIR . 'includes/class-ncwi-ajax.php';
+    require_once NCWI_PLUGIN_DIR . 'includes/class-ncwi-signup.php';
+    require_once NCWI_PLUGIN_DIR . 'includes/class-ncwi-nextcloud-handler.php'; 
+    require_once NCWI_PLUGIN_DIR . 'includes/class-ncwi-updater.php';
+    require_once NCWI_PLUGIN_DIR . 'includes/class-ncwi-checkout-integration.php';
+    require_once NCWI_PLUGIN_DIR . 'includes/class-ncwi-purchase-handler.php';
     }
     
     private function define_hooks() {
@@ -71,15 +72,16 @@ class Nextcloud_Woo_Integration {
         
         // Initialize components
         NCWI_API::get_instance();
-        NCWI_Account_Manager::get_instance();
-        NCWI_Subscription_Handler::get_instance();
-        NCWI_My_Account::get_instance();
-        NCWI_Admin::get_instance();
-        NCWI_Security::get_instance();
-        NCWI_Ajax::get_instance();
-        NCWI_Signup::get_instance();
-        NCWI_Checkout_Integration::get_instance();
-        NCWI_Purchase_Handler::get_instance();
+    NCWI_Account_Manager::get_instance();
+    NCWI_Subscription_Handler::get_instance();
+    NCWI_My_Account::get_instance();
+    NCWI_Admin::get_instance();
+    NCWI_Security::get_instance();
+    NCWI_Ajax::get_instance();
+    NCWI_Signup::get_instance();
+    NCWI_Nextcloud_Handler::get_instance();  
+    NCWI_Checkout_Integration::get_instance();
+   NCWI_Purchase_Handler::get_instance();
     if (is_admin()) {
         new NCWI_Updater(__FILE__); 
     }

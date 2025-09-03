@@ -104,10 +104,10 @@ class NCWI_Account_Manager {
         
         // Send welcome email with credentials
         if (!empty($result['password'])) {
-            $this->send_welcome_email($account_id, array_merge($result['data'], [
-                'password' => $result['password']
-            ]));
-        }
+    $this->send_welcome_email($account_id, array_merge($result['data'], [
+        'password' => $result['password']
+    ]));
+}
         
         return $account_id;
     }

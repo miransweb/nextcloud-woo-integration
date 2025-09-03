@@ -316,6 +316,50 @@ public function ajax_check_verification() {
             'account' => array_merge($account, $updated_info)
         ]);
     }
+
+    /**
+ * AJAX: Resend verification email
+ */
+public function ajax_resend_verification() {
+    NCWI_Security::validate_ajax_nonce();
+    
+    if (!is_user_logged_in()) {
+        wp_send_json_error(__('Je moet ingelogd zijn', 'nc-woo-integration'));
+    }
+    
+    $account_id = intval($_POST['account_id'] ?? 0);
+    $email = sanitize_email($_POST['email'] ?? '');
+    $user_id = get_current_user_id();
+    
+    if (!$account_id || !$email) {
+        wp_send_json_error(__('Ongeldige gegevens', 'nc-woo-integration'));
+    }
+    
+    // Verify ownership
+    global $wpdb;
+    $account = $wpdb->get_row($wpdb->prepare(
+        "SELECT * FROM {$wpdb->prefix}ncwi_accounts WHERE id = %d AND user_id = %d",
+        $account_id,
+        $user_id
+    ));
+    
+    if (!$account) {
+        wp_send_json_error(__('Account niet gevonden', 'nc-woo-integration'));
+    }
+    
+    // Call API to resend verification
+    $api = NCWI_API::get_instance();
+    $shop_user_id = intval($user_id);
+    $result = $api->send_email_verification($shop_user_id, $email);
+    
+    if (is_wp_error($result)) {
+        wp_send_json_error($result->get_error_message());
+    }
+    
+    wp_send_json_success([
+        'message' => __('Verificatie email opnieuw verstuurd!', 'nc-woo-integration')
+    ]);
+}
     
  /**
      * AJAX: Get account details
