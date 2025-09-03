@@ -1,0 +1,519 @@
+<?php
+
+if (!defined('ABSPATH')) {
+    exit;
+}
+
+class NCWI_Account_Manager {
+    
+    private static $instance = null;
+    private $api;
+    
+    public static function get_instance() {
+        if (null === self::$instance) {
+            self::$instance = new self();
+        }
+        return self::$instance;
+    }
+    
+    private function __construct() {
+        $this->api = NCWI_API::get_instance();
+        $this->init_hooks();
+    }
+    
+    private function init_hooks() {
+        // Handle account creation during WP registration
+        add_action('user_register', [$this, 'handle_user_registration'], 10, 1);
+        
+        // Handle account creation form submission
+        add_action('wp_ajax_ncwi_create_account', [$this, 'ajax_create_account']);
+        add_action('wp_ajax_ncwi_link_account', [$this, 'ajax_link_account']);
+        
+        // Email verification
+        add_action('init', [$this, 'handle_email_verification']);
+    }
+    
+    /**
+     * Create a new Nextcloud account
+     */
+    public function create_account($user_id, $data = []) {
+        $user = get_user_by('id', $user_id);
+        if (!$user) {
+            return new WP_Error('invalid_user', __('Ongeldige gebruiker', 'nc-woo-integration'));
+        }
+        
+        // Prepare account data
+        $account_data = wp_parse_args($data, [
+            'email' => $user->user_email,
+            'username' => $this->generate_nc_username($user),
+            'wp_user_id' => $user_id,
+            'quota' => get_option('ncwi_trial_quota', '1GB')
+        ]);
+        
+        // Create account via API
+        $result = $this->api->create_nextcloud_account($account_data);
+        
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        
+        if (empty($result['success'])) {
+            // Check if it's pending verification
+            if (isset($result['data']['status']) && $result['data']['status'] === 'pending_verification') {
+                // Store account as pending
+                $account_id = $this->store_account([
+                    'user_id' => $user_id,
+                    'nc_username' => $account_data['username'],
+                    'nc_email' => $account_data['email'],
+                    'nc_server' => get_option('ncwi_nextcloud_api_url'),
+                    'nc_user_id' => 'pending_' . $user_id,
+                    'status' => 'pending_verification'
+                ]);
+                
+                if (is_wp_error($account_id)) {
+                    return $account_id;
+                }
+                
+                return [
+                    'account_id' => $account_id,
+                    'status' => 'pending_verification',
+                    'message' => $result['data']['message']
+                ];
+            }
+            
+            return new WP_Error('api_error', __('Account aanmaken mislukt', 'nc-woo-integration'));
+        }
+        
+        if (empty($result['data'])) {
+            return new WP_Error('api_error', __('Geen data ontvangen van API', 'nc-woo-integration'));
+        }
+        
+        // Store account in database
+        $account_id = $this->store_account([
+            'user_id' => $user_id,
+            'nc_username' => $result['data']['username'] ?? $account_data['username'],
+            'nc_email' => $result['data']['email'] ?? $account_data['email'],
+            'nc_server' => $result['data']['server'] ?? get_option('ncwi_nextcloud_api_url'),
+            'nc_user_id' => $result['data']['nc_user_id'] ?? $result['data']['user_id'] ?? $account_data['username'],
+            'status' => 'active'
+        ]);
+        
+        if (is_wp_error($account_id)) {
+            return $account_id;
+        }
+        
+        // Send welcome email with credentials
+        if (!empty($result['password'])) {
+            $this->send_welcome_email($account_id, array_merge($result['data'], [
+                'password' => $result['password']
+            ]));
+        }
+        
+        return $account_id;
+    }
+    
+    /**
+     * Send welcome email with credentials
+     */
+    private function send_welcome_email($account_id, $account_data) {
+        $subject = sprintf(__('Je Nextcloud account is aangemaakt - %s', 'nc-woo-integration'), get_bloginfo('name'));
+        
+        $message = sprintf(
+            __("Hallo,\n\nJe Nextcloud account is succesvol aangemaakt!\n\nJe gegevens:\nGebruikersnaam: %s\nWachtwoord: %s\nServer: %s\n\nBewaar deze gegevens goed!\n\nJe kunt nu inloggen op:\n%s\n\nMet vriendelijke groet,\n%s", 'nc-woo-integration'),
+            $account_data['username'],
+            $account_data['password'],
+            $account_data['server'] ?? get_option('ncwi_nextcloud_api_url'),
+            $account_data['server'] ?? get_option('ncwi_nextcloud_api_url'),
+            get_bloginfo('name')
+        );
+        
+        wp_mail($account_data['email'], $subject, $message);
+    }
+    
+    /**
+     * Link existing Nextcloud account
+     */
+    public function link_existing_account($user_id, $nc_credentials) {
+        // Validate credentials
+        $validated = $this->validate_nc_credentials($nc_credentials);
+        if (is_wp_error($validated)) {
+            return $validated;
+        }
+        
+        // Link via API
+        $result = $this->api->link_existing_account([
+            'nc_username' => $nc_credentials['username'],
+            'nc_email' => $nc_credentials['email'],
+            'wp_user_id' => $user_id
+        ]);
+        
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        
+        if (empty($result['success']) || empty($result['data'])) {
+            return new WP_Error('link_failed', __('Account koppelen mislukt', 'nc-woo-integration'));
+        }
+        
+        // Store account in database
+        $account_id = $this->store_account([
+            'user_id' => $user_id,
+            'nc_username' => $result['data']['username'],
+            'nc_email' => $result['data']['email'],
+            'nc_server' => $result['data']['server'],
+            'nc_user_id' => $result['data']['nc_user_id'],
+            'status' => 'active'
+        ]);
+        
+        return $account_id;
+    }
+    
+    /**
+     * Get all Nextcloud accounts for a user
+     */
+    public function get_user_accounts($user_id) {
+        global $wpdb;
+        
+        $table_name = $wpdb->prefix . 'ncwi_accounts';
+        
+        $accounts = $wpdb->get_results($wpdb->prepare(
+            "SELECT a.*, 
+                    GROUP_CONCAT(DISTINCT s.subscription_id) as subscription_ids,
+                    GROUP_CONCAT(DISTINCT s.quota) as quotas
+             FROM $table_name a
+             LEFT JOIN {$wpdb->prefix}ncwi_account_subscriptions s ON a.id = s.account_id
+             WHERE a.user_id = %d
+             GROUP BY a.id
+             ORDER BY a.created_at DESC",
+            $user_id
+        ), ARRAY_A);
+
+        if (!$accounts) {
+            return [];
+        }
+        
+   foreach ($accounts as &$account) {
+            // Try to get additional info from API (but don't fail if it doesn't work)
+            try {
+                $api_data = $this->api->get_user_accounts($user_id);
+                if (!is_wp_error($api_data) && !empty($api_data['data'])) {
+                    foreach ($api_data['data'] as $api_account) {
+                        if (isset($api_account['nc_user_id']) && $api_account['nc_user_id'] === $account['nc_user_id']) {
+                            $account['current_quota'] = $api_account['quota'] ?? null;
+                            $account['used_space'] = $api_account['used_space'] ?? null;
+                            $account['last_login'] = $api_account['last_login'] ?? null;
+                            break;
+                        }
+                    }
+                }
+            } catch (Exception $e) {
+                // Log error but continue
+                error_log('NCWI API Error in get_user_accounts: ' . $e->getMessage());
+            }
+            
+            // Parse subscription data
+            $account['subscriptions'] = [];
+            if (!empty($account['subscription_ids'])) {
+                $sub_ids = array_filter(explode(',', $account['subscription_ids']));
+                $quotas = explode(',', $account['quotas'] ?? '');
+                $statuses = explode(',', $account['subscription_statuses'] ?? '');
+                
+                foreach ($sub_ids as $index => $sub_id) {
+                    if (empty($sub_id)) continue;
+                    
+                    // Check if WooCommerce Subscriptions is active
+                    if (function_exists('wcs_get_subscription')) {
+                        $subscription = wcs_get_subscription($sub_id);
+                        if ($subscription) {
+                            $account['subscriptions'][] = [
+                                'id' => $sub_id,
+                                'status' => $subscription->get_status(),
+                                'quota' => isset($quotas[$index]) ? $quotas[$index] : '',
+                                'next_payment' => $subscription->get_date('next_payment')
+                            ];
+                        }
+                    } else {
+                        // Fallback if subscriptions plugin not active
+                        $account['subscriptions'][] = [
+                            'id' => $sub_id,
+                            'status' => isset($statuses[$index]) ? $statuses[$index] : 'unknown',
+                            'quota' => isset($quotas[$index]) ? $quotas[$index] : '',
+                            'next_payment' => null
+                        ];
+                    }
+                }
+            }
+            
+            // Clean up temporary fields
+            unset($account['subscription_ids']);
+            unset($account['quotas']);
+            unset($account['subscription_statuses']);
+        }
+        
+        return $accounts;
+    }
+    
+    /**
+     * Delete Nextcloud account
+     */
+    public function delete_account($account_id, $user_id) {
+        global $wpdb;
+        
+        // Verify ownership
+        $account = $this->get_account($account_id);
+        if (!$account || $account['user_id'] != $user_id) {
+            return new WP_Error('unauthorized', __('Geen toegang tot dit account', 'nc-woo-integration'));
+        }
+        
+        // Check for active subscriptions
+        $table_name = $wpdb->prefix . 'ncwi_account_subscriptions';
+        $active_subs = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM $table_name WHERE account_id = %d AND status = 'active'",
+            $account_id
+        ));
+        
+        if ($active_subs > 0) {
+            return new WP_Error('active_subscriptions', __('Kan account met actieve subscripties niet verwijderen', 'nc-woo-integration'));
+        }
+        
+        // Delete from database
+        $wpdb->delete($wpdb->prefix . 'ncwi_accounts', ['id' => $account_id]);
+        $wpdb->delete($wpdb->prefix . 'ncwi_account_subscriptions', ['account_id' => $account_id]);
+        
+        return true;
+    }
+    
+    /**
+     * Handle user registration
+     */
+    public function handle_user_registration($user_id) {
+        // Check if auto-create is enabled
+        if (get_option('ncwi_auto_create_on_register', 'no') !== 'yes') {
+            return;
+        }
+        
+        // Create trial account
+        $this->create_account($user_id, [
+            'quota' => get_option('ncwi_trial_quota', '1GB')
+        ]);
+    }
+    
+    /**
+     * AJAX handler for account creation
+     */
+    public function ajax_create_account() {
+        check_ajax_referer('ncwi_ajax_nonce', 'nonce');
+        
+        if (!is_user_logged_in()) {
+            wp_send_json_error(__('Je moet ingelogd zijn', 'nc-woo-integration'));
+        }
+        
+        $user_id = get_current_user_id();
+        $username = sanitize_user($_POST['username'] ?? '');
+        $email = sanitize_email($_POST['email'] ?? '');
+        
+        if (empty($username) || empty($email)) {
+            wp_send_json_error(__('Gebruikersnaam en email zijn verplicht', 'nc-woo-integration'));
+        }
+        
+        $result = $this->create_account($user_id, [
+            'username' => $username,
+            'email' => $email
+        ]);
+        
+        if (is_wp_error($result)) {
+            wp_send_json_error($result->get_error_message());
+        }
+        
+        wp_send_json_success([
+            'message' => __('Account succesvol aangemaakt. Controleer je email voor verificatie.', 'nc-woo-integration'),
+            'account_id' => $result
+        ]);
+    }
+    
+    /**
+     * AJAX handler for linking existing account
+     */
+    public function ajax_link_account() {
+        check_ajax_referer('ncwi_ajax_nonce', 'nonce');
+        
+        if (!is_user_logged_in()) {
+            wp_send_json_error(__('Je moet ingelogd zijn', 'nc-woo-integration'));
+        }
+        
+        $user_id = get_current_user_id();
+        $username = sanitize_user($_POST['username'] ?? '');
+        $email = sanitize_email($_POST['email'] ?? '');
+        $password = $_POST['password'] ?? '';
+        
+        if (empty($username) || empty($email) || empty($password)) {
+            wp_send_json_error(__('Alle velden zijn verplicht', 'nc-woo-integration'));
+        }
+        
+        $result = $this->link_existing_account($user_id, [
+            'username' => $username,
+            'email' => $email,
+            'password' => $password
+        ]);
+        
+        if (is_wp_error($result)) {
+            wp_send_json_error($result->get_error_message());
+        }
+        
+        wp_send_json_success([
+            'message' => __('Account succesvol gekoppeld', 'nc-woo-integration'),
+            'account_id' => $result
+        ]);
+    }
+    
+    /**
+     * Handle email verification
+     */
+    public function handle_email_verification() {
+        if (!isset($_GET['ncwi_verify']) || !isset($_GET['token'])) {
+            return;
+        }
+        
+        $account_id = intval($_GET['ncwi_verify']);
+        $token = sanitize_text_field($_GET['token']);
+        
+        $account = $this->get_account($account_id);
+        if (!$account) {
+            wp_die(__('Ongeldig verificatie link', 'nc-woo-integration'));
+        }
+        
+        // Verify token
+        $stored_token = get_transient('ncwi_verify_' . $account_id);
+        if ($stored_token !== $token) {
+            wp_die(__('Verificatie token verlopen of ongeldig', 'nc-woo-integration'));
+        }
+        
+        // Verify via Nextcloud API
+        $result = $this->api->verify_nextcloud_email($account['nc_user_id'], $token);
+        
+        if (is_wp_error($result)) {
+            wp_die(__('Verificatie mislukt: ', 'nc-woo-integration') . $result->get_error_message());
+        }
+        
+        // Update account status
+        global $wpdb;
+        $wpdb->update(
+            $wpdb->prefix . 'ncwi_accounts',
+            ['status' => 'active'],
+            ['id' => $account_id]
+        );
+        
+        // Delete token
+        delete_transient('ncwi_verify_' . $account_id);
+        
+        // Redirect to success page
+        wp_redirect(wc_get_account_endpoint_url('nextcloud-accounts') . '?verified=1');
+        exit;
+    }
+    
+    /**
+     * Generate unique Nextcloud username
+     */
+    private function generate_nc_username($user) {
+        $base_username = sanitize_user($user->user_login);
+        $username = $base_username;
+        $counter = 1;
+        
+        // Check if username exists
+        while ($this->nc_username_exists($username)) {
+            $username = $base_username . $counter;
+            $counter++;
+        }
+        
+        return $username;
+    }
+    
+    /**
+     * Check if Nextcloud username exists
+     */
+    private function nc_username_exists($username) {
+        global $wpdb;
+        
+        $exists = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$wpdb->prefix}ncwi_accounts WHERE nc_username = %s",
+            $username
+        ));
+        
+        return $exists > 0;
+    }
+    
+    /**
+     * Validate Nextcloud credentials
+     */
+    private function validate_nc_credentials($credentials) {
+        // Basic validation
+        if (empty($credentials['username']) || empty($credentials['email']) || empty($credentials['password'])) {
+            return new WP_Error('missing_fields', __('Alle velden zijn verplicht', 'nc-woo-integration'));
+        }
+        
+        if (!is_email($credentials['email'])) {
+            return new WP_Error('invalid_email', __('Ongeldig email adres', 'nc-woo-integration'));
+        }
+        
+        // Additional validation can be added here
+        
+        return true;
+    }
+    
+    /**
+     * Store account in database
+     */
+    private function store_account($data) {
+        global $wpdb;
+        
+        $result = $wpdb->insert(
+            $wpdb->prefix . 'ncwi_accounts',
+            $data,
+            ['%d', '%s', '%s', '%s', '%s', '%s']
+        );
+        
+        if ($result === false) {
+            return new WP_Error('db_error', __('Database fout bij opslaan account', 'nc-woo-integration'));
+        }
+        
+        return $wpdb->insert_id;
+    }
+    
+    /**
+     * Get single account
+     */
+    private function get_account($account_id) {
+        global $wpdb;
+        
+        return $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$wpdb->prefix}ncwi_accounts WHERE id = %d",
+            $account_id
+        ), ARRAY_A);
+    }
+    
+    /**
+     * Send verification email
+     */
+    private function send_verification_email($account_id, $account_data) {
+        $token = wp_generate_password(32, false);
+        set_transient('ncwi_verify_' . $account_id, $token, DAY_IN_SECONDS);
+        
+        $verification_url = add_query_arg([
+            'ncwi_verify' => $account_id,
+            'token' => $token
+        ], home_url());
+        
+        $subject = sprintf(__('Verifieer je Nextcloud account - %s', 'nc-woo-integration'), get_bloginfo('name'));
+        
+        $message = sprintf(
+            __("Hallo,\n\nBedankt voor het aanmaken van een Nextcloud account.\n\nKlik op de volgende link om je email adres te verifiëren:\n%s\n\nJe Nextcloud gegevens:\nGebruikersnaam: %s\nWachtwoord: %s\nServer: %s\n\nBewaar deze gegevens goed!\n\nDeze link is 24 uur geldig.\n\nMet vriendelijke groet,\n%s", 'nc-woo-integration'),
+            $verification_url,
+            $account_data['username'],
+            $account_data['password'] ?? '[Gebruik je bestaande wachtwoord]',
+            $account_data['server'],
+            get_bloginfo('name')
+        );
+        
+        wp_mail($account_data['email'], $subject, $message);
+    }
+}

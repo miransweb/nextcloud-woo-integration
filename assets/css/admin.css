@@ -1,0 +1,157 @@
+/* Nextcloud WooCommerce Integration - Admin Styles */
+
+/* Settings wrapper */
+.ncwi-settings-wrapper {
+    display: flex;
+    gap: 30px;
+    margin-top: 20px;
+}
+
+.ncwi-settings-main {
+    flex: 1;
+    background: white;
+    padding: 20px;
+    border: 1px solid #ccd0d4;
+    box-shadow: 0 1px 1px rgba(0,0,0,.04);
+}
+
+.ncwi-settings-sidebar {
+    width: 300px;
+}
+
+/* Settings sections */
+.ncwi-settings-section {
+    margin-bottom: 40px;
+}
+
+.ncwi-settings-section h2 {
+    border-bottom: 1px solid #e2e4e7;
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+}
+
+/* Info boxes */
+.ncwi-info-box {
+    background: white;
+    border: 1px solid #ccd0d4;
+    box-shadow: 0 1px 1px rgba(0,0,0,.04);
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.ncwi-info-box h3 {
+    margin-top: 0;
+    margin-bottom: 15px;
+}
+
+.ncwi-info-box .button {
+    width: 100%;
+    text-align: center;
+}
+
+/* Status indicators */
+.ncwi-status-success {
+    color: #46b450;
+    font-weight: 600;
+}
+
+.ncwi-status-error {
+    color: #dc3232;
+    font-weight: 600;
+}
+
+/* Form fields */
+.form-table th {
+    padding-top: 20px;
+}
+
+.form-table td {
+    padding-top: 15px;
+    padding-bottom: 15px;
+}
+
+input[type="text"].regular-text,
+input[type="password"].regular-text {
+    width: 100%;
+    max-width: 400px;
+}
+
+/* Description text */
+.description {
+    display: block;
+    margin-top: 5px;
+    color: #666;
+}
+
+/* Test connection button */
+.button + .button {
+    margin-left: 10px;
+}
+
+/* Stats list */
+.ncwi-info-box ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.ncwi-info-box ul li {
+    padding: 5px 0;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.ncwi-info-box ul li:last-child {
+    border-bottom: none;
+}
+
+/* Responsive */
+@media screen and (max-width: 1200px) {
+    .ncwi-settings-wrapper {
+        flex-direction: column;
+    }
+    
+    .ncwi-settings-sidebar {
+        width: 100%;
+    }
+}
+
+/* Admin notices */
+.notice.notice-error strong,
+.notice.notice-success strong {
+    display: block;
+    margin-bottom: 5px;
+}
+
+/* Settings saved message */
+.notice-success.settings-error {
+    margin: 15px 0;
+}
+
+/* Product options */
+.options_group .ncwi-field-wrapper {
+    margin: 10px;
+}
+
+.options_group .ncwi-field-wrapper label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 600;
+}
+
+/* Loading spinner */
+.ncwi-spinner {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid #0073aa;
+    border-radius: 50%;
+    animation: ncwi-spin 1s linear infinite;
+    margin-left: 10px;
+    vertical-align: middle;
+}
+
+@keyframes ncwi-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}

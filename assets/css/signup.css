@@ -1,0 +1,338 @@
+/* Nextcloud WooCommerce Integration - Signup Styles */
+
+.ncwi-signup-wrapper {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 20px 0;
+}
+
+.ncwi-signup-wrapper h2 {
+    margin-bottom: 10px;
+}
+
+.ncwi-signup-wrapper > p {
+    margin-bottom: 30px;
+    color: #666;
+}
+
+/* Form styling */
+.ncwi-signup-form {
+    background: #f9f9f9;
+    padding: 30px;
+    border: 1px solid #e5e5e5;
+    border-radius: 5px;
+    position: relative;
+}
+
+.ncwi-signup-form.processing {
+    opacity: 0.3;
+    pointer-events: none;
+}
+
+.ncwi-signup-form .form-row {
+    margin-bottom: 20px;
+}
+
+.ncwi-signup-form label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 600;
+    color: #333;
+}
+
+.ncwi-signup-form input[type="text"],
+.ncwi-signup-form input[type="email"],
+.ncwi-signup-form input[type="password"] {
+    width: 100%;
+    padding: 10px 15px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 16px;
+    transition: border-color 0.3s;
+}
+
+.ncwi-signup-form input[type="text"]:focus,
+.ncwi-signup-form input[type="email"]:focus,
+.ncwi-signup-form input[type="password"]:focus {
+    border-color: #0073aa;
+    outline: none;
+    box-shadow: 0 0 0 1px #0073aa;
+}
+
+.ncwi-signup-form .description {
+    display: block;
+    margin-top: 5px;
+    font-size: 13px;
+    color: #666;
+    font-style: italic;
+}
+
+/* Checkbox styling */
+.ncwi-signup-form .woocommerce-form__label-for-checkbox {
+    display: flex;
+    align-items: flex-start;
+    cursor: pointer;
+}
+
+.ncwi-signup-form .woocommerce-form__input-checkbox {
+    margin-right: 8px;
+    margin-top: 2px;
+}
+
+/* Button styling */
+.ncwi-signup-form .button {
+    width: 100%;
+    padding: 15px;
+    font-size: 16px;
+    font-weight: 600;
+    background: #0073aa;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.ncwi-signup-form .button:hover {
+    background: #005a87;
+}
+
+.ncwi-signup-form .button:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+/* Progress Indicator Styles */
+#ncwi-signup-progress {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.95);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ncwi-progress-wrapper {
+    background: white;
+    padding: 40px;
+    border-radius: 10px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+    max-width: 500px;
+    width: 90%;
+    text-align: center;
+}
+
+.ncwi-progress-wrapper h3 {
+    margin: 0 0 30px 0;
+    color: #333;
+    font-size: 24px;
+}
+
+.ncwi-progress-steps {
+    margin-bottom: 30px;
+}
+
+.ncwi-step {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    margin-bottom: 15px;
+    padding: 10px;
+    background: #f5f5f5;
+    border-radius: 5px;
+    transition: all 0.3s ease;
+}
+
+.ncwi-step.active {
+    background: #e3f2fd;
+    transform: scale(1.02);
+}
+
+.ncwi-step.complete {
+    background: #e8f5e9;
+}
+
+.ncwi-step-icon {
+    font-size: 16px;
+    margin-right: 15px;
+    width: 24px;
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: #f0f0f0;
+    position: relative;
+}
+
+.ncwi-step.active .ncwi-step-icon {
+    background: #0073aa;
+}
+
+.ncwi-step.complete .ncwi-step-icon {
+    background: #4caf50;
+}
+
+/* Spinner for active steps */
+.ncwi-step-icon .spinner {
+    width: 12px;
+    height: 12px;
+    border: 2px solid #ffffff;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: ncwi-spin 0.8s linear infinite;
+}
+
+/* Checkmark for completed steps */
+.ncwi-step-icon .checkmark {
+    color: white;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.ncwi-step-text {
+    font-size: 16px;
+    color: #666;
+    text-align: left;
+}
+
+.ncwi-step.active .ncwi-step-text {
+    color: #0073aa;
+    font-weight: 600;
+}
+
+.ncwi-step.complete .ncwi-step-text {
+    color: #4caf50;
+}
+
+/* Progress bar */
+.ncwi-progress-bar {
+    width: 100%;
+    height: 8px;
+    background: #e0e0e0;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 20px;
+}
+
+.ncwi-progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #0073aa 0%, #005a87 100%);
+    width: 0%;
+    transition: width 0.5s ease;
+}
+
+.ncwi-progress-message {
+    margin: 0;
+    color: #666;
+    font-size: 14px;
+}
+
+/* Login link */
+.ncwi-login-link {
+    text-align: center;
+    margin-top: 30px;
+    padding-top: 30px;
+    border-top: 1px solid #eee;
+}
+
+.ncwi-login-link p {
+    margin: 0;
+    color: #666;
+}
+
+/* Messages */
+#ncwi-signup-messages {
+    margin-top: 20px;
+}
+
+#ncwi-signup-messages .woocommerce-message,
+#ncwi-signup-messages .woocommerce-error {
+    margin: 0;
+}
+
+/* Required asterisk */
+.required {
+    color: #e2401c;
+    font-weight: 700;
+}
+
+/* Two column layout for password fields */
+@media (min-width: 768px) {
+    .ncwi-signup-form .form-row-first {
+        float: left;
+        width: 48%;
+        margin-right: 4%;
+    }
+    
+    .ncwi-signup-form .form-row-last {
+        float: left;
+        width: 48%;
+    }
+}
+
+/* Responsive */
+@media (max-width: 767px) {
+    .ncwi-signup-wrapper {
+        padding: 20px;
+    }
+    
+    .ncwi-signup-form {
+        padding: 20px;
+    }
+    
+    .ncwi-signup-form .form-row-first,
+    .ncwi-signup-form .form-row-last {
+        width: 100%;
+        float: none;
+        margin-right: 0;
+    }
+    
+    .ncwi-progress-wrapper {
+        padding: 20px;
+    }
+    
+    .ncwi-step {
+        padding: 8px;
+    }
+    
+    .ncwi-step-icon {
+        font-size: 20px;
+        margin-right: 10px;
+    }
+    
+    .ncwi-step-text {
+        font-size: 14px;
+    }
+}
+
+/* Loading state */
+.ncwi-signup-form.loading {
+    position: relative;
+    pointer-events: none;
+    opacity: 0.6;
+}
+
+.ncwi-signup-form.loading::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    margin: -15px 0 0 -15px;
+    width: 30px;
+    height: 30px;
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid #0073aa;
+    border-radius: 50%;
+    animation: ncwi-spin 1s linear infinite;
+}
+
+@keyframes ncwi-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
