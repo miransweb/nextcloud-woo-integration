@@ -131,7 +131,9 @@ class NCWI_My_Account {
         if (isset($_GET['verified'])) {
             wc_print_notice(__('Je Nextcloud account is succesvol geverifieerd!', 'nc-woo-integration'), 'success');
         }
-        
+        if (isset($_GET['deployer_verified'])) {
+    wc_print_notice(__('Je email adres is succesvol geverifieerd!', 'nc-woo-integration'), 'success');
+}
         // Include template
         $this->include_template('my-account/nextcloud-accounts.php', [
             'accounts' => $accounts,

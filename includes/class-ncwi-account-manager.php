@@ -31,6 +31,8 @@ class NCWI_Account_Manager {
         
         // Email verification
         add_action('init', [$this, 'handle_email_verification']);
+        add_action('init', [$this, 'handle_deployer_verification']);
+        
     }
     
     /**
@@ -115,20 +117,23 @@ class NCWI_Account_Manager {
     /**
      * Send welcome email with credentials
      */
-    private function send_welcome_email($account_id, $account_data) {
-        $subject = sprintf(__('Je Nextcloud account is aangemaakt - %s', 'nc-woo-integration'), get_bloginfo('name'));
-        
-        $message = sprintf(
-            __("Hallo,\n\nJe Nextcloud account is succesvol aangemaakt!\n\nJe gegevens:\nGebruikersnaam: %s\nWachtwoord: %s\nServer: %s\n\nBewaar deze gegevens goed!\n\nJe kunt nu inloggen op:\n%s\n\nMet vriendelijke groet,\n%s", 'nc-woo-integration'),
-            $account_data['username'],
-            $account_data['password'],
-            $account_data['server'] ?? get_option('ncwi_nextcloud_api_url'),
-            $account_data['server'] ?? get_option('ncwi_nextcloud_api_url'),
-            get_bloginfo('name')
-        );
-        
-        wp_mail($account_data['email'], $subject, $message);
-    }
+   private function send_welcome_email($account_id, $account_data) {
+    $subject = sprintf(__('Je Nextcloud account is aangemaakt - %s', 'nc-woo-integration'), get_bloginfo('name'));
+    
+    $server_url = $account_data['server'] ?? get_option('ncwi_nextcloud_api_url');
+    
+    $message = sprintf(
+    __("Hallo,\n\nJe Nextcloud account is succesvol aangemaakt!\n\nJe gegevens:\nGebruikersnaam: %s\nServer: %s\n\nOm je wachtwoord in te stellen:\n1. Ga naar bovenstaande server URL\n2. Klik op 'Wachtwoord vergeten?'\n3. Vul je gebruikersnaam '%s' in\n4. Je ontvangt een email om je wachtwoord in te stellen\n\nMet vriendelijke groet,\n%s", 'nc-woo-integration'),
+    $account_data['username'],
+    $server_url,
+    $account_data['username'],
+    get_bloginfo('name')
+);
+    
+    wp_mail($account_data['email'], $subject, $message);
+}
+
+   
     
     /**
      * Link existing Nextcloud account
@@ -167,6 +172,8 @@ class NCWI_Account_Manager {
         
         return $account_id;
     }
+
+    
     
     /**
      * Get all Nextcloud accounts for a user
@@ -410,6 +417,29 @@ class NCWI_Account_Manager {
         wp_redirect(wc_get_account_endpoint_url('nextcloud-accounts') . '?verified=1');
         exit;
     }
+
+    /**
+ * Handle email verification from Deployer
+ */
+public function handle_deployer_verification() {
+    if (!isset($_GET['ncwi_deployer_verify']) || !isset($_GET['token'])) {
+        return;
+    }
+    
+    $token = sanitize_text_field($_GET['token']);
+    
+    // Verify token via Deployer API
+    $api = NCWI_API::get_instance();
+    $result = $api->verify_deployer_email_token($token);
+    
+    if (is_wp_error($result)) {
+        wp_die(__('Email verificatie mislukt: ', 'nc-woo-integration') . $result->get_error_message());
+    }
+    
+    // Success! Redirect to account page
+    wp_redirect(wc_get_account_endpoint_url('nextcloud-accounts') . '?deployer_verified=1');
+    exit;
+}
     
     /**
      * Generate unique Nextcloud username

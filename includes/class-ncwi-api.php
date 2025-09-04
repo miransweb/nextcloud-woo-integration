@@ -186,7 +186,7 @@ class NCWI_API {
         $endpoint = $this->deployer_api_url . '/api/users/';
         
         // Generate a secure password
-        $password = wp_generate_password(16, false, false); // Simplified password for testing
+        $password = wp_generate_password(16, true, true); // Simplified password for testing
         
         $body = [
             'shop_user_id' => $shop_user_id,
@@ -496,6 +496,27 @@ class NCWI_API {
         
         return json_decode(wp_remote_retrieve_body($response), true);
     }
+
+    /**
+ * Verify email token with Deployer
+ */
+public function verify_deployer_email_token($token) {
+    $endpoint = $this->deployer_api_url . '/api/email/verification/verify/' . $token . '/';
+    
+    $response = $this->make_deployer_request('GET', $endpoint);
+    
+    if (is_wp_error($response)) {
+        return $response;
+    }
+    
+    $response_code = wp_remote_retrieve_response_code($response);
+    
+    if ($response_code !== 200) {
+        return new WP_Error('verification_failed', __('Verificatie token ongeldig of verlopen', 'nc-woo-integration'));
+    }
+    
+    return true;
+}
     
     /**
      * Make authenticated request to Deployer API
