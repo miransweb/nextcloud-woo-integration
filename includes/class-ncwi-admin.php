@@ -70,6 +70,7 @@ class NCWI_Admin {
         register_setting('ncwi_api_settings', 'ncwi_deployer_api_url');
         register_setting('ncwi_api_settings', 'ncwi_deployer_api_key');
         register_setting('ncwi_api_settings', 'ncwi_nextcloud_api_url');
+        register_setting('ncwi_api_settings', 'ncwi_shared_secret');
         
         // General Settings
         register_setting('ncwi_general_settings', 'ncwi_enable_email_verification');
@@ -121,6 +122,18 @@ class NCWI_Admin {
                 'description' => __('De URL van je Nextcloud instance (bijv. https://nextcloud.example.com)', 'nc-woo-integration')
             ]
         );
+
+        add_settings_field(
+    'ncwi_shared_secret',
+    __('Shared Secret', 'nc-woo-integration'),
+    [$this, 'password_field_callback'],
+    'ncwi_api_settings',
+    'ncwi_api_section',
+    [
+        'label_for' => 'ncwi_shared_secret',
+        'description' => __('Geheime sleutel voor signature verificatie. Moet overeenkomen met Nextcloud Subscription Manager.', 'nc-woo-integration')
+    ]
+);
         
         // General Section
         add_settings_section(
@@ -252,6 +265,24 @@ class NCWI_Admin {
                                         <p class="description"><?php _e('Je Deployer API key (wordt veilig opgeslagen)', 'nc-woo-integration'); ?></p>
                                     </td>
                                 </tr>
+<tr>
+    <th scope="row">
+        <label for="ncwi_shared_secret"><?php _e('Shared Secret', 'nc-woo-integration'); ?></label>
+    </th>
+    <td>
+        <input type="password" id="ncwi_shared_secret" name="ncwi_shared_secret" 
+               value="<?php echo esc_attr(get_option('ncwi_shared_secret')); ?>" 
+               class="regular-text" />
+        <button type="button" class="button" onclick="document.getElementById('ncwi_shared_secret').type = document.getElementById('ncwi_shared_secret').type === 'password' ? 'text' : 'password';">
+            <?php _e('Toon/Verberg', 'nc-woo-integration'); ?>
+        </button>
+        <p class="description"><?php _e('Geheime sleutel voor signature verificatie. Deze moet exact overeenkomen met de secret in je Nextcloud Subscription Manager app.', 'nc-woo-integration'); ?></p>
+        <p class="description" style="color: #d63638;">
+            <?php _e('BELANGRIJK: Kopieer de secret uit Nextcloud admin → Subscription Manager → Generate Secret', 'nc-woo-integration'); ?>
+        </p>
+    </td>
+</tr>
+
                                <!-- <tr>
                                     <th scope="row">
                                         <label for="ncwi_nextcloud_api_url"><?php _e('Nextcloud API URL', 'nc-woo-integration'); ?></label>
@@ -364,6 +395,11 @@ class NCWI_Admin {
         if (isset($_POST['ncwi_nextcloud_api_url'])) {
             update_option('ncwi_nextcloud_api_url', sanitize_text_field($_POST['ncwi_nextcloud_api_url']));
         }
+
+        // Shared Secret
+        if (isset($_POST['ncwi_shared_secret'])) {
+    update_option('ncwi_shared_secret', sanitize_text_field($_POST['ncwi_shared_secret']));
+}
         
         // General Settings
         $email_verification = isset($_POST['ncwi_enable_email_verification']) ? 'yes' : 'no';

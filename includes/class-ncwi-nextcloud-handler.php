@@ -49,6 +49,10 @@ class NCWI_Nextcloud_Handler {
      * Handle incoming redirect from Nextcloud
      */
     public function handle_nextcloud_redirect() {
+if (isset($_GET['debug_params'])) {
+        wp_die('<pre>GET params: ' . print_r($_GET, true) . '</pre>');
+    }
+
         if (!isset($_GET['nc_server']) || !isset($_GET['signature'])) {
             return;
         }
@@ -171,23 +175,34 @@ class NCWI_Nextcloud_Handler {
      * Verify signature from Nextcloud
      */
     private function verify_signature($params) {
-        $shared_secret = get_option('ncwi_shared_secret', '');
-        
+        $shared_secret = trim(get_option('ncwi_shared_secret', ''));
         if (empty($shared_secret)) {
             return false;
         }
-        
-        $signature = $params['signature'];
-        unset($params['signature']);
-        
-        // Sort params
-        ksort($params);
+
+        if (empty($shared_secret) || !isset($params['signature'])) {
+        return false;
+    }
+$signature = $params['signature'];
+    $nextcloud_params = [];
+      $expected_params = ['nc_server', 'nc_user_id', 'nc_email', 'nc_display_name', 'action'];
+    
+    foreach ($expected_params as $param) {
+        if (isset($params[$param])) {
+            $nextcloud_params[$param] = $params[$param];
+        }
+    }
+    
+    // Sort params
+    ksort($nextcloud_params);
         
         // Generate signature
-        $data_string = http_build_query($params);
-        $expected_signature = hash_hmac('sha256', $data_string, $shared_secret);
-        
-        return hash_equals($expected_signature, $signature);
+       $data_string = http_build_query($nextcloud_params, '', '&', PHP_QUERY_RFC3986);
+    
+    // calculate expected signature
+    $expected_signature = hash_hmac('sha256', $data_string, $shared_secret);
+
+    return hash_equals($expected_signature, $signature);
     }
     
     /**
