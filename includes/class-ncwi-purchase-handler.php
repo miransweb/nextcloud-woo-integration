@@ -21,9 +21,9 @@ class NCWI_Purchase_Handler {
         add_action('woocommerce_subscription_status_active', [$this, 'handle_subscription_activation']);
         
         // Add custom My Account endpoint
-        add_filter('woocommerce_account_menu_items', [$this, 'add_subscription_endpoint']);
-        add_action('init', [$this, 'add_subscription_rewrite_endpoint']);
-        add_action('woocommerce_account_view-subscription_endpoint', [$this, 'subscription_endpoint_content']);
+       // add_filter('woocommerce_account_menu_items', [$this, 'add_subscription_endpoint']);
+        //add_action('init', [$this, 'add_subscription_rewrite_endpoint']);
+        //add_action('woocommerce_account_view-subscription_endpoint', [$this, 'subscription_endpoint_content']);
     }
     
     /**

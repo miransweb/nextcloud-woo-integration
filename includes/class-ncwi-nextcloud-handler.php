@@ -76,7 +76,7 @@ class NCWI_Nextcloud_Handler {
             // Go to subscription management
             wp_redirect(wc_get_account_endpoint_url('subscriptions'));
             exit;
-        } elseif ($action === 'subscribe') {
+        } elseif ($_GET['action'] === 'subscribe') {
         // Trial gebruiker - ga direct naar productpagina
         // WooCommerce handelt login/registratie af tijdens checkout
         wp_redirect(home_url('/product/personalstorage-subscription/'));

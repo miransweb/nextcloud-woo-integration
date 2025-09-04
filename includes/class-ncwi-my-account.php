@@ -63,6 +63,7 @@ class NCWI_My_Account {
         }
     }, 999);
 }
+
     
     /**
      * Register new endpoint
