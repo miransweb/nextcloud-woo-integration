@@ -229,6 +229,25 @@ public function ajax_check_verification() {
         wp_send_json_success([
             'message' => __('Subscription succesvol gekoppeld', 'nc-woo-integration')
         ]);
+
+        if ($result) {
+    // Get the account details
+    $account = $wpdb->get_row($wpdb->prepare(
+        "SELECT * FROM {$wpdb->prefix}ncwi_accounts WHERE id = %d",
+        $account_id
+    ), ARRAY_A);
+    
+    // If subscription is active and account is in trial, move to paid group
+    if ($subscription->get_status() === 'active' && $account) {
+        $api = NCWI_API::get_instance();
+        $api->update_user_group($account['nc_user_id'], 'paid');
+        
+        // Also update quota
+        $subscription_handler = NCWI_Subscription_Handler::get_instance();
+        $quota = $subscription_handler->get_subscription_quota($subscription);
+        $api->update_user_quota($account['nc_user_id'], $quota);
+    }
+}
     }
     
     /**

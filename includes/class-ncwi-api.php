@@ -343,7 +343,6 @@ class NCWI_API {
             return new WP_Error('json_error', __('Invalid JSON response from API', 'nc-woo-integration'));
         }
         
-        // Ensure we have the expected structure
         if (!is_array($data)) {
             $data = [];
         }
@@ -393,6 +392,89 @@ class NCWI_API {
         return json_decode(wp_remote_retrieve_body($response), true);
     }
     
+/**
+ * Update user group - moves user between TGC groups
+ * This method is called when subscription status changes
+ */
+public function update_user_group($nc_user_id, $new_group, $server_url = null) {
+    // Define TGC groups
+    $tgc_groups = [
+        'paid' => 'tgcusers_paid',
+        'trial' => 'tgcusers_trial',
+        'unsubscribed' => 'tgcusers_unsubscribed'
+    ];
+    
+    // Validate group
+    if (!isset($tgc_groups[$new_group])) {
+        return new WP_Error('invalid_group', __('Invalid group specified', 'nc-woo-integration'));
+    }
+    
+    $target_group = $tgc_groups[$new_group];
+    $server_url = $server_url ?? $this->nextcloud_api_url;
+    
+    // First, remove user from all TGC groups
+    foreach ($tgc_groups as $group_key => $group_name) {
+        if ($group_key !== $new_group) {
+            $remove_result = $this->remove_user_from_group($nc_user_id, $server_url, $group_name);
+            
+            // Log error but continue with other groups
+            if (is_wp_error($remove_result) && defined('WP_DEBUG') && WP_DEBUG) {
+                error_log(sprintf(
+                    'NCWI: Failed to remove user %s from group %s: %s',
+                    $nc_user_id,
+                    $group_name,
+                    $remove_result->get_error_message()
+                ));
+            }
+        }
+    }
+    
+    // Now add user to the target group
+    $add_result = $this->add_user_to_group($nc_user_id, $server_url, $target_group);
+    
+    if (is_wp_error($add_result)) {
+        error_log(sprintf(
+            'NCWI ERROR: Failed to add user %s to group %s: %s',
+            $nc_user_id,
+            $target_group,
+            $add_result->get_error_message()
+        ));
+        return $add_result;
+    }
+    
+    // Log successful group change
+    if (defined('WP_DEBUG') && WP_DEBUG) {
+        error_log(sprintf(
+            'NCWI: Successfully moved user %s to group %s',
+            $nc_user_id,
+            $target_group
+        ));
+    }
+    
+    return $add_result;
+}
+
+/**
+ * Update user status (enable/disable)
+ */
+public function update_user_status($nc_user_id, $enabled = true, $server_url = null) {
+    $endpoint = $this->deployer_api_url . '/api/users/status/';
+    
+    $body = [
+        'user_id' => $nc_user_id,
+        'server_url' => $server_url ?? $this->nextcloud_api_url,
+        'enabled' => $enabled
+    ];
+    
+    $response = $this->make_deployer_request('PUT', $endpoint, $body);
+    
+    if (is_wp_error($response)) {
+        return $response;
+    }
+    
+    return json_decode(wp_remote_retrieve_body($response), true);
+}
+
     /**
      * Unsubscribe user (deactivate subscription)
      */

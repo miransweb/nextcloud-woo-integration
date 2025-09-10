@@ -82,23 +82,58 @@ class NCWI_Subscription_Handler {
      * Handle payment complete
      */
     public function handle_payment_complete($subscription) {
-        $linked_accounts = $this->get_linked_accounts($subscription->get_id());
-        
-        foreach ($linked_accounts as $account) {
-            // Move from trial to paid group
-            $this->api->update_user_group($account['nc_user_id'], 'paid');
-            
-            // Update quota based on subscription
-            $quota = $this->get_subscription_quota($subscription);
-            $this->api->update_user_quota($account['nc_user_id'], $quota);
-            
-            // Enable user if disabled
-            $this->api->update_user_status($account['nc_user_id'], true);
-            
-            // Update local database
-            $this->update_account_subscription_status($account['id'], $subscription->get_id(), 'active');
-        }
+    error_log('NCWI: handle_payment_complete called for subscription ID: ' . $subscription->get_id());
+    
+    // Get only the linked accounts for this subscription
+    $linked_accounts = $this->get_linked_accounts($subscription->get_id());
+    
+    if (empty($linked_accounts)) {
+        error_log('NCWI: No linked accounts found for subscription ID: ' . $subscription->get_id());
+        return;
     }
+    
+    error_log('NCWI: Found ' . count($linked_accounts) . ' linked accounts for this subscription');
+    
+    foreach ($linked_accounts as $account) {
+        error_log('NCWI: Processing linked account - NC User: ' . $account['nc_user_id']);
+        
+        // Move from trial to paid group
+        $group_result = $this->api->update_user_group($account['nc_user_id'], 'paid');
+        
+        if (is_wp_error($group_result)) {
+            error_log('NCWI ERROR: Failed to update user group: ' . $group_result->get_error_message());
+            // Continue with other updates even if group update fails
+        } else {
+            error_log('NCWI: Successfully updated user group to paid');
+        }
+        
+        // Update quota based on subscription
+        $quota = $this->get_subscription_quota($subscription);
+        error_log('NCWI: Setting quota to: ' . $quota);
+        
+        $quota_result = $this->api->update_user_quota($account['nc_user_id'], $quota);
+        
+        if (is_wp_error($quota_result)) {
+            error_log('NCWI ERROR: Failed to update quota: ' . $quota_result->get_error_message());
+        } else {
+            error_log('NCWI: Successfully updated quota');
+        }
+        
+        // Enable user if disabled
+        $status_result = $this->api->update_user_status($account['nc_user_id'], true);
+        
+        if (is_wp_error($status_result)) {
+            error_log('NCWI ERROR: Failed to update user status: ' . $status_result->get_error_message());
+        } else {
+            error_log('NCWI: Successfully enabled user');
+        }
+        
+        // Update local database to track the active subscription
+        $this->update_account_subscription_status($account['id'], $subscription->get_id(), 'active');
+        
+        error_log('NCWI: Completed processing for linked account ' . $account['nc_user_id']);
+    }
+}
     
     /**
      * Handle payment failed
