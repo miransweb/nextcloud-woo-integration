@@ -39,6 +39,8 @@ class NCWI_Account_Manager {
      * Create a new Nextcloud account
      */
     public function create_account($user_id, $data = []) {
+    error_log('NCWI Debug - data username: ' . ($data['username'] ?? 'EMPTY'));
+error_log('NCWI Debug - data email: ' . ($data['email'] ?? 'EMPTY'));
         $user = get_user_by('id', $user_id);
         if (!$user) {
             return new WP_Error('invalid_user', __('Ongeldige gebruiker', 'nc-woo-integration'));
@@ -52,8 +54,15 @@ class NCWI_Account_Manager {
             'quota' => get_option('ncwi_trial_quota', '1GB')
         ]);
         
+        error_log('NCWI Debug - account_data username: ' . ($account_data['username'] ?? 'EMPTY'));
+error_log('NCWI Debug - account_data email: ' . ($account_data['email'] ?? 'EMPTY'));
+error_log('NCWI Debug - account_data wp_user_id: ' . ($account_data['wp_user_id'] ?? 'EMPTY'));
+error_log('NCWI Debug - Checking API instance: ' . get_class($this->api));
+error_log('NCWI Debug - account_data right before API call: ' . json_encode($account_data));
+
         // Create account via API
         $result = $this->api->create_nextcloud_account($account_data);
+        error_log('NCWI Debug - API call completed, result type: ' . gettype($result));
         
         if (is_wp_error($result)) {
             return $result;
@@ -318,6 +327,10 @@ class NCWI_Account_Manager {
         $user_id = get_current_user_id();
         $username = sanitize_user($_POST['username'] ?? '');
         $email = sanitize_email($_POST['email'] ?? '');
+
+        error_log('NCWI Debug - POST data: ' . json_encode($_POST));
+error_log('NCWI Debug - username from POST: ' . ($_POST['username'] ?? 'NOT SET'));
+error_log('NCWI Debug - email from POST: ' . ($_POST['email'] ?? 'NOT SET'));
         
         if (empty($username) || empty($email)) {
             wp_send_json_error(__('Gebruikersnaam en email zijn verplicht', 'nc-woo-integration'));

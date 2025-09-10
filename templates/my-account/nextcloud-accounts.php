@@ -211,6 +211,8 @@ if (!defined('ABSPATH')) {
                         <?php _e('Je ontvangt een verificatie email op dit adres', 'nc-woo-integration'); ?>
                     </span>
                 </p>
+
+                
                 
                 <div class="ncwi-info-box" style="background: #e3f2fd; padding: 10px; margin: 10px 0; border-radius: 4px;">
                     <strong><?php _e('Let op:', 'nc-woo-integration'); ?></strong>

@@ -106,6 +106,16 @@ class NCWI_API {
      * Create Nextcloud account via Deployer
      */
     public function create_nextcloud_account($data) {
+         error_log('NCWI Debug - create_nextcloud_account - func_num_args: ' . func_num_args());
+    error_log('NCWI Debug - create_nextcloud_account - gettype data: ' . gettype($data));
+    error_log('NCWI Debug - create_nextcloud_account - json_encode data: ' . json_encode($data));
+    
+    if (is_array($data)) {
+        error_log('NCWI Debug - data is array with count: ' . count($data));
+        foreach ($data as $key => $value) {
+            error_log('NCWI Debug - data[' . $key . '] = ' . $value);
+        }
+    }
         // First ensure shop user exists
         $user = get_user_by('id', $data['wp_user_id']);
         $shop_user_result = $this->create_shop_user([
@@ -186,13 +196,16 @@ class NCWI_API {
         $endpoint = $this->deployer_api_url . '/api/users/';
         
         // Generate a secure password
-        $password = wp_generate_password(16, true, true); // Simplified password for testing
-        
+        $password = $this->generate_nextcloud_password(16); 
+        error_log('NCWI Debug - Generated password: ' . $password);
         $body = [
             'shop_user_id' => $shop_user_id,
             'email' => sanitize_email($data['email']),
             'password' => $password
         ];
+
+        error_log('NCWI Debug - shop_user_id before body: ' . $shop_user_id);
+error_log('NCWI Debug - Body to send to API: ' . json_encode($body));
         
         $response = $this->make_deployer_request('POST', $endpoint, $body);
         
@@ -203,6 +216,9 @@ class NCWI_API {
         $response_code = wp_remote_retrieve_response_code($response);
         $response_body = wp_remote_retrieve_body($response);
         $result = json_decode($response_body, true);
+
+        error_log('NCWI Debug - API Response Code: ' . $response_code);
+error_log('NCWI Debug - API Response Body: ' . $response_body);
         
         // Check for email verification error
         if ($response_code === 400 && isset($result['error']) && $result['error'] === 'Email not verified') {
@@ -598,6 +614,33 @@ public function verify_deployer_email_token($token) {
     }
     
     return true;
+}
+
+/**
+ * Generate a password that meets Nextcloud requirements
+ * At least 1 uppercase, 1 lowercase, 1 number, 1 special character
+ */
+private function generate_nextcloud_password($length = 16) {
+    $uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    $lowercase = 'abcdefghijklmnopqrstuvwxyz';
+    $numbers = '0123456789';
+    $special = '!@#$%^&*()_+-=[]{}|;:,.<>?';
+    
+    // Ensure at least one of each type
+    $password = '';
+    $password .= $uppercase[random_int(0, strlen($uppercase) - 1)];
+    $password .= $lowercase[random_int(0, strlen($lowercase) - 1)];
+    $password .= $numbers[random_int(0, strlen($numbers) - 1)];
+    $password .= $special[random_int(0, strlen($special) - 1)];
+    
+    // Fill the rest randomly
+    $all_chars = $uppercase . $lowercase . $numbers . $special;
+    for ($i = 4; $i < $length; $i++) {
+        $password .= $all_chars[random_int(0, strlen($all_chars) - 1)];
+    }
+    
+    // Shuffle the password so required chars aren't always at the start
+    return str_shuffle($password);
 }
     
     /**
