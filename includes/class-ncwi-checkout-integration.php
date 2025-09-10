@@ -91,30 +91,37 @@ class NCWI_Checkout_Integration {
      * Link Nextcloud account na registratie tijdens checkout
      */
     public function link_nextcloud_after_registration($customer_id, $new_customer_data, $password_generated) {
-        if (!session_id()) {
-            session_start();
-        }
-        
-        $nc_data = $_SESSION['ncwi_nextcloud_data'] ?? null;
-        
-        if ($nc_data) {
-            // Link het Nextcloud account aan de nieuwe WordPress gebruiker
-            global $wpdb;
-            
-            $wpdb->insert(
-                $wpdb->prefix . 'ncwi_accounts',
-                [
-                    'user_id' => $customer_id,
-                    'nc_user_id' => $nc_data['user_id'],
-                    'nc_email' => $nc_data['email'],
-                    'nc_server' => $nc_data['server'],
-                    'nc_display_name' => $nc_data['display_name'] ?? '',
-                    'created_at' => current_time('mysql')
-                ],
-                ['%d', '%s', '%s', '%s', '%s', '%s']
-            );
-        }
+    if (!session_id()) {
+        session_start();
     }
+    
+    $nc_data = $_SESSION['ncwi_nextcloud_data'] ?? null;
+    
+    // ALLEEN koppelen als er Nextcloud data is EN als het een bestaand NC account is
+    if ($nc_data && !empty($nc_data['server']) && !empty($nc_data['user_id'])) {
+        // Link het Nextcloud account aan de nieuwe WordPress gebruiker
+        global $wpdb;
+        
+        $wpdb->insert(
+            $wpdb->prefix . 'ncwi_accounts',
+            [
+                'user_id' => $customer_id,
+                'nc_user_id' => $nc_data['user_id'],
+                'nc_email' => $nc_data['email'],
+                'nc_server' => $nc_data['server'],
+                'nc_display_name' => $nc_data['display_name'] ?? '',
+                'nc_username' => $nc_data['user_id'], // Voeg username toe
+                'status' => 'active', // Dit is een bestaand NC account
+                'created_at' => current_time('mysql')
+            ],
+            ['%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s']
+        );
+        
+        // Clear session data na gebruik
+        unset($_SESSION['ncwi_nextcloud_data']);
+    }
+    // Als er GEEN nc_data is, doe dan NIETS - geen nep account aanmaken!
+}
     
     /**
      * Toon melding op productpagina als gebruiker van Nextcloud komt

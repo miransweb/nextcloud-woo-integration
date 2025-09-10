@@ -19,6 +19,8 @@ class NCWI_Purchase_Handler {
         
         // Hook into subscription activation
         add_action('woocommerce_subscription_status_active', [$this, 'handle_subscription_activation']);
+
+        add_action('woocommerce_thankyou', [$this, 'add_nextcloud_notice_after_purchase'], 20, 1);
         
         // Add custom My Account endpoint
        // add_filter('woocommerce_account_menu_items', [$this, 'add_subscription_endpoint']);
@@ -81,6 +83,37 @@ class NCWI_Purchase_Handler {
             unset($_SESSION['ncwi_nextcloud_data']);
         }
     }
+
+    // melding als direct in de shop een subscription gekocht wordt zonder dat er een NC account is
+public function add_nextcloud_notice_after_purchase($order_id) {
+    $order = wc_get_order($order_id);
+    if (!$order) return;
+    
+    // Check of er een Nextcloud subscription is gekocht
+    $has_nextcloud_subscription = false;
+    foreach ($order->get_items() as $item) {
+        $product = $item->get_product();
+        if ($product && strpos($product->get_slug(), 'personalstorage-subscription') !== false) {
+            $has_nextcloud_subscription = true;
+            break;
+        }
+    }
+    
+    if ($has_nextcloud_subscription) {
+        // Check of gebruiker al een Nextcloud account heeft
+        $user_id = $order->get_user_id();
+        $account_manager = NCWI_Account_Manager::get_instance();
+        $accounts = $account_manager->get_user_accounts($user_id);
+        
+        if (empty($accounts)) {
+            // Voeg notice toe
+            wc_add_notice(
+                __('Om je Nextcloud subscription te gebruiken, moet je eerst een Nextcloud account aanmaken of koppelen. Ga naar je account dashboard om dit te doen.', 'nc-woo-integration'),
+                'notice'
+            );
+        }
+    }
+}
     
     /**
      * Handle subscription activation
