@@ -158,5 +158,6 @@ public function add_nextcloud_notice_after_purchase($order_id) {
         
         // Subscribe user via API
         $api->subscribe_user($nc_data['user_id'], $nc_data['server'], $quota);
+        $api->update_user_group($nc_data['user_id'], 'paid', $nc_data['server']);
     }
 }
