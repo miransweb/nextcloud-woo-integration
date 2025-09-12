@@ -448,6 +448,24 @@ public function handle_deployer_verification() {
     if (is_wp_error($result)) {
         wp_die(__('Email verificatie mislukt: ', 'nc-woo-integration') . $result->get_error_message());
     }
+
+    
+    
+    // Find pending accounts for current user (if logged in) or based on session
+    if (is_user_logged_in()) {
+        global $wpdb;
+        $user_id = get_current_user_id();
+        
+       $wpdb->query($wpdb->prepare(
+            "UPDATE {$wpdb->prefix}ncwi_accounts 
+             SET nc_user_id = nc_email, 
+                 status = 'active' 
+             WHERE user_id = %d 
+             AND nc_user_id LIKE 'pending_%'",
+            $user_id
+        ));
+       
+    }
     
     // Success! Redirect to account page
     wp_redirect(wc_get_account_endpoint_url('nextcloud-accounts') . '?deployer_verified=1');

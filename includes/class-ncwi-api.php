@@ -431,17 +431,7 @@ public function update_user_group($nc_user_id, $new_group, $server_url = null) {
     // First, remove user from all TGC groups
     foreach ($tgc_groups as $group_key => $group_name) {
         if ($group_key !== $new_group) {
-            $remove_result = $this->remove_user_from_group($nc_user_id, $server_url, $group_name);
-            
-            // Log error but continue with other groups
-            if (is_wp_error($remove_result) && defined('WP_DEBUG') && WP_DEBUG) {
-                error_log(sprintf(
-                    'NCWI: Failed to remove user %s from group %s: %s',
-                    $nc_user_id,
-                    $group_name,
-                    $remove_result->get_error_message()
-                ));
-            }
+            $this->remove_user_from_group($nc_user_id, $server_url, $group_name);
         }
     }
     
@@ -456,15 +446,6 @@ public function update_user_group($nc_user_id, $new_group, $server_url = null) {
             $add_result->get_error_message()
         ));
         return $add_result;
-    }
-    
-    // Log successful group change
-    if (defined('WP_DEBUG') && WP_DEBUG) {
-        error_log(sprintf(
-            'NCWI: Successfully moved user %s to group %s',
-            $nc_user_id,
-            $target_group
-        ));
     }
     
     return $add_result;
