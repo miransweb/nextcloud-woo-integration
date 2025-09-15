@@ -108,7 +108,7 @@ public function add_nextcloud_notice_after_purchase($order_id) {
         if (empty($accounts)) {
             // Voeg notice toe
             wc_add_notice(
-                __('Om je Nextcloud subscription te gebruiken, moet je eerst een Nextcloud account aanmaken of koppelen. Ga naar je account dashboard om dit te doen.', 'nc-woo-integration'),
+                __('To use your Nextcloud subscription, you first need to create or link a Nextcloud account. Go to Nextcloud accounts to do this.', 'nc-woo-integration'),
                 'notice'
             );
         }

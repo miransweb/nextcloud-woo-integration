@@ -43,7 +43,7 @@ class NCWI_Account_Manager {
 error_log('NCWI Debug - data email: ' . ($data['email'] ?? 'EMPTY'));
         $user = get_user_by('id', $user_id);
         if (!$user) {
-            return new WP_Error('invalid_user', __('Ongeldige gebruiker', 'nc-woo-integration'));
+            return new WP_Error('invalid_user', __('Invalid user', 'nc-woo-integration'));
         }
         
         // Prepare account data
@@ -92,11 +92,11 @@ error_log('NCWI Debug - account_data right before API call: ' . json_encode($acc
                 ];
             }
             
-            return new WP_Error('api_error', __('Account aanmaken mislukt', 'nc-woo-integration'));
+            return new WP_Error('api_error', __('Account creation failed', 'nc-woo-integration'));
         }
         
         if (empty($result['data'])) {
-            return new WP_Error('api_error', __('Geen data ontvangen van API', 'nc-woo-integration'));
+            return new WP_Error('api_error', __('No data from API', 'nc-woo-integration'));
         }
         
         // Store account in database
@@ -127,12 +127,12 @@ error_log('NCWI Debug - account_data right before API call: ' . json_encode($acc
      * Send welcome email with credentials
      */
    private function send_welcome_email($account_id, $account_data) {
-    $subject = sprintf(__('Je Nextcloud account is aangemaakt - %s', 'nc-woo-integration'), get_bloginfo('name'));
+    $subject = sprintf(__('Your Nextcloud account is created - %s', 'nc-woo-integration'), get_bloginfo('name'));
     
     $server_url = $account_data['server'] ?? get_option('ncwi_nextcloud_api_url');
     
     $message = sprintf(
-    __("Hallo,\n\nJe Nextcloud account is succesvol aangemaakt!\n\nJe gegevens:\nGebruikersnaam: %s\nServer: %s\n\nOm je wachtwoord in te stellen:\n1. Ga naar bovenstaande server URL\n2. Klik op 'Wachtwoord vergeten?'\n3. Vul je gebruikersnaam '%s' in\n4. Je ontvangt een email om je wachtwoord in te stellen\n\nMet vriendelijke groet,\n%s", 'nc-woo-integration'),
+    __("Hello,\n\nJe Nextcloud account is created!\n\nYour account:\nUsername: %s\nServer: %s\n\nTo set your password:\n1. Go to the server URL above\n2. Click on 'Reset password'\n3. Enter your username '%s' in\n4. You will receive an email to set your password\n\nYours sincerely,\n%s", 'nc-woo-integration'),
     $account_data['username'],
     $server_url,
     $account_data['username'],
@@ -165,109 +165,139 @@ error_log('NCWI Debug - account_data right before API call: ' . json_encode($acc
             return $result;
         }
         
-        if (empty($result['success']) || empty($result['data'])) {
-            return new WP_Error('link_failed', __('Account koppelen mislukt', 'nc-woo-integration'));
-        }
-        
-        // Store account in database
-        $account_id = $this->store_account([
-            'user_id' => $user_id,
-            'nc_username' => $result['data']['username'],
-            'nc_email' => $result['data']['email'],
-            'nc_server' => $result['data']['server'],
-            'nc_user_id' => $result['data']['nc_user_id'],
-            'status' => 'active'
-        ]);
-        
-        return $account_id;
+       $account_data = [
+        'user_id' => $user_id,
+        'nc_username' => $nc_credentials['username'],
+        'nc_email' => $nc_credentials['email'],
+        'nc_server' => get_option('ncwi_nextcloud_api_url'),
+        'nc_user_id' => $nc_credentials['email'], // Email is the NC user ID
+        'status' => 'active'
+    ];
+    
+    // Store account in database
+    $account_id = $this->store_account($account_data);
+    
+    return $account_id;
+}
+
+    
+    
+  /**
+ * Get all Nextcloud accounts for a user
+ */
+public function get_user_accounts($user_id) {
+    global $wpdb;
+    
+    $table_name = $wpdb->prefix . 'ncwi_accounts';
+    
+    // Get accounts from local database
+    $accounts = $wpdb->get_results($wpdb->prepare(
+        "SELECT a.*, 
+                GROUP_CONCAT(DISTINCT s.subscription_id) as subscription_ids,
+                GROUP_CONCAT(DISTINCT s.quota) as quotas
+         FROM $table_name a
+         LEFT JOIN {$wpdb->prefix}ncwi_account_subscriptions s ON a.id = s.account_id
+         WHERE a.user_id = %d
+         GROUP BY a.id
+         ORDER BY a.created_at DESC",
+        $user_id
+    ), ARRAY_A);
+
+    if (!$accounts) {
+        return [];
     }
-
     
+    // Get active accounts from Deployer API
+    $api_result = $this->api->get_user_accounts($user_id);
+    $active_accounts = [];
     
-    /**
-     * Get all Nextcloud accounts for a user
-     */
-    public function get_user_accounts($user_id) {
-        global $wpdb;
-        
-        $table_name = $wpdb->prefix . 'ncwi_accounts';
-        
-        $accounts = $wpdb->get_results($wpdb->prepare(
-            "SELECT a.*, 
-                    GROUP_CONCAT(DISTINCT s.subscription_id) as subscription_ids,
-                    GROUP_CONCAT(DISTINCT s.quota) as quotas
-             FROM $table_name a
-             LEFT JOIN {$wpdb->prefix}ncwi_account_subscriptions s ON a.id = s.account_id
-             WHERE a.user_id = %d
-             GROUP BY a.id
-             ORDER BY a.created_at DESC",
-            $user_id
-        ), ARRAY_A);
-
-        if (!$accounts) {
-            return [];
+    if (!is_wp_error($api_result) && !empty($api_result['success']) && !empty($api_result['data']['nc_users'])) {
+        // API returns ['success' => true, 'data' => ['nc_users' => [...], 'total_count' => x]]
+        foreach ($api_result['data']['nc_users'] as $api_account) {
+            $active_accounts[] = $api_account['user_id']; 
+        }
+    }
+    
+    // Process accounts and filter out deleted ones
+    $valid_accounts = [];
+    
+    foreach ($accounts as &$account) {
+        // Skip if no API data available (don't mark as deleted)
+        if (empty($active_accounts)) {
+            // No API data, just include the account without marking as deleted
+            $valid_accounts[] = $account;
+            continue;
         }
         
-   foreach ($accounts as &$account) {
-            // Try to get additional info from API (but don't fail if it doesn't work)
-            try {
-                $api_data = $this->api->get_user_accounts($user_id);
-                if (!is_wp_error($api_data) && !empty($api_data['data'])) {
-                    foreach ($api_data['data'] as $api_account) {
-                        if (isset($api_account['nc_user_id']) && $api_account['nc_user_id'] === $account['nc_user_id']) {
-                            $account['current_quota'] = $api_account['quota'] ?? null;
-                            $account['used_space'] = $api_account['used_space'] ?? null;
-                            $account['last_login'] = $api_account['last_login'] ?? null;
-                            break;
-                        }
-                    }
-                }
-            } catch (Exception $e) {
-                // Log error but continue
-                error_log('NCWI API Error in get_user_accounts: ' . $e->getMessage());
-            }
+        // Check if account still exists in Deployer
+        if (!in_array($account['nc_user_id'], $active_accounts)) {
+            // Account doesn't exist anymore, mark as deleted
+            $wpdb->update(
+                $wpdb->prefix . 'ncwi_accounts',
+                ['status' => 'deleted'],
+                ['id' => $account['id']],
+                ['%s'],
+                ['%d']
+            );
             
-            // Parse subscription data
+            // Skip this account - don't add to valid accounts
+            continue;
+        }
+        
+        // Account exists, add extra info from API if available
+        if (!is_wp_error($api_result) && !empty($api_result['data']['nc_users'])) {
+            foreach ($api_result['data']['nc_users'] as $api_account) {
+                if ($api_account['user_id'] === $account['nc_user_id']) {
+                   
+                    $account['current_quota'] = $api_account['quota'] ?? null;
+                    $account['server_url'] = $api_account['server_url'] ?? $account['nc_server'];
+                    break;
+                }
+            }
+        }
+        
+        // Process subscription info
+        if (!empty($account['subscription_ids'])) {
+            $subscription_ids = explode(',', $account['subscription_ids']);
+            $quotas = explode(',', $account['quotas']);
+            
             $account['subscriptions'] = [];
-            if (!empty($account['subscription_ids'])) {
-                $sub_ids = array_filter(explode(',', $account['subscription_ids']));
-                $quotas = explode(',', $account['quotas'] ?? '');
-                $statuses = explode(',', $account['subscription_statuses'] ?? '');
-                
-                foreach ($sub_ids as $index => $sub_id) {
-                    if (empty($sub_id)) continue;
-                    
-                    // Check if WooCommerce Subscriptions is active
-                    if (function_exists('wcs_get_subscription')) {
-                        $subscription = wcs_get_subscription($sub_id);
-                        if ($subscription) {
-                            $account['subscriptions'][] = [
-                                'id' => $sub_id,
-                                'status' => $subscription->get_status(),
-                                'quota' => isset($quotas[$index]) ? $quotas[$index] : '',
-                                'next_payment' => $subscription->get_date('next_payment')
-                            ];
-                        }
-                    } else {
-                        // Fallback if subscriptions plugin not active
+            
+            foreach ($subscription_ids as $index => $sub_id) {
+                if (function_exists('wcs_get_subscription')) {
+                    $subscription = wcs_get_subscription($sub_id);
+                    if ($subscription) {
                         $account['subscriptions'][] = [
                             'id' => $sub_id,
-                            'status' => isset($statuses[$index]) ? $statuses[$index] : 'unknown',
+                            'status' => $subscription->get_status(),
                             'quota' => isset($quotas[$index]) ? $quotas[$index] : '',
-                            'next_payment' => null
+                            'next_payment' => $subscription->get_date('next_payment')
                         ];
                     }
+                } else {
+                    // Fallback if subscriptions plugin not active
+                    $account['subscriptions'][] = [
+                        'id' => $sub_id,
+                        'status' => 'unknown',
+                        'quota' => isset($quotas[$index]) ? $quotas[$index] : '',
+                        'next_payment' => null
+                    ];
                 }
             }
-            
-            // Clean up temporary fields
-            unset($account['subscription_ids']);
-            unset($account['quotas']);
-            unset($account['subscription_statuses']);
+        } else {
+            $account['subscriptions'] = [];
         }
         
-        return $accounts;
+        // Clean up temporary fields
+        unset($account['subscription_ids']);
+        unset($account['quotas']);
+        
+        // Add to valid accounts
+        $valid_accounts[] = $account;
     }
+    
+    return $valid_accounts;
+}
     
     /**
      * Delete Nextcloud account
@@ -278,7 +308,7 @@ error_log('NCWI Debug - account_data right before API call: ' . json_encode($acc
         // Verify ownership
         $account = $this->get_account($account_id);
         if (!$account || $account['user_id'] != $user_id) {
-            return new WP_Error('unauthorized', __('Geen toegang tot dit account', 'nc-woo-integration'));
+            return new WP_Error('unauthorized', __('No access to this account', 'nc-woo-integration'));
         }
         
         // Check for active subscriptions
@@ -289,7 +319,7 @@ error_log('NCWI Debug - account_data right before API call: ' . json_encode($acc
         ));
         
         if ($active_subs > 0) {
-            return new WP_Error('active_subscriptions', __('Kan account met actieve subscripties niet verwijderen', 'nc-woo-integration'));
+            return new WP_Error('active_subscriptions', __('Can not delete account with active subscriptions', 'nc-woo-integration'));
         }
         
         // Delete from database
@@ -321,7 +351,7 @@ error_log('NCWI Debug - account_data right before API call: ' . json_encode($acc
         check_ajax_referer('ncwi_ajax_nonce', 'nonce');
         
         if (!is_user_logged_in()) {
-            wp_send_json_error(__('Je moet ingelogd zijn', 'nc-woo-integration'));
+            wp_send_json_error(__('You have to be logged in', 'nc-woo-integration'));
         }
         
         $user_id = get_current_user_id();
@@ -333,7 +363,7 @@ error_log('NCWI Debug - username from POST: ' . ($_POST['username'] ?? 'NOT SET'
 error_log('NCWI Debug - email from POST: ' . ($_POST['email'] ?? 'NOT SET'));
         
         if (empty($username) || empty($email)) {
-            wp_send_json_error(__('Gebruikersnaam en email zijn verplicht', 'nc-woo-integration'));
+            wp_send_json_error(__('Username and email are required', 'nc-woo-integration'));
         }
         
         $result = $this->create_account($user_id, [
@@ -346,7 +376,7 @@ error_log('NCWI Debug - email from POST: ' . ($_POST['email'] ?? 'NOT SET'));
         }
         
         wp_send_json_success([
-            'message' => __('Account succesvol aangemaakt. Controleer je email voor verificatie.', 'nc-woo-integration'),
+            'message' => __('Account successfully created. Check your email for verification.', 'nc-woo-integration'),
             'account_id' => $result
         ]);
     }
@@ -358,7 +388,7 @@ error_log('NCWI Debug - email from POST: ' . ($_POST['email'] ?? 'NOT SET'));
         check_ajax_referer('ncwi_ajax_nonce', 'nonce');
         
         if (!is_user_logged_in()) {
-            wp_send_json_error(__('Je moet ingelogd zijn', 'nc-woo-integration'));
+            wp_send_json_error(__('You have to be logged in', 'nc-woo-integration'));
         }
         
         $user_id = get_current_user_id();
@@ -367,7 +397,7 @@ error_log('NCWI Debug - email from POST: ' . ($_POST['email'] ?? 'NOT SET'));
         $password = $_POST['password'] ?? '';
         
         if (empty($username) || empty($email) || empty($password)) {
-            wp_send_json_error(__('Alle velden zijn verplicht', 'nc-woo-integration'));
+            wp_send_json_error(__('All fields are required', 'nc-woo-integration'));
         }
         
         $result = $this->link_existing_account($user_id, [
@@ -381,7 +411,7 @@ error_log('NCWI Debug - email from POST: ' . ($_POST['email'] ?? 'NOT SET'));
         }
         
         wp_send_json_success([
-            'message' => __('Account succesvol gekoppeld', 'nc-woo-integration'),
+            'message' => __('Account ssuccessfully linked', 'nc-woo-integration'),
             'account_id' => $result
         ]);
     }
@@ -399,20 +429,20 @@ error_log('NCWI Debug - email from POST: ' . ($_POST['email'] ?? 'NOT SET'));
         
         $account = $this->get_account($account_id);
         if (!$account) {
-            wp_die(__('Ongeldig verificatie link', 'nc-woo-integration'));
+            wp_die(__('Invalid verification link', 'nc-woo-integration'));
         }
         
         // Verify token
         $stored_token = get_transient('ncwi_verify_' . $account_id);
         if ($stored_token !== $token) {
-            wp_die(__('Verificatie token verlopen of ongeldig', 'nc-woo-integration'));
+            wp_die(__('Verification token expired or invalid', 'nc-woo-integration'));
         }
         
         // Verify via Nextcloud API
         $result = $this->api->verify_nextcloud_email($account['nc_user_id'], $token);
         
         if (is_wp_error($result)) {
-            wp_die(__('Verificatie mislukt: ', 'nc-woo-integration') . $result->get_error_message());
+            wp_die(__('Verification failed: ', 'nc-woo-integration') . $result->get_error_message());
         }
         
         // Update account status
@@ -446,7 +476,7 @@ public function handle_deployer_verification() {
     $result = $api->verify_deployer_email_token($token);
     
     if (is_wp_error($result)) {
-        wp_die(__('Email verificatie mislukt: ', 'nc-woo-integration') . $result->get_error_message());
+        wp_die(__('Email verification failed: ', 'nc-woo-integration') . $result->get_error_message());
     }
 
     
@@ -509,11 +539,11 @@ public function handle_deployer_verification() {
     private function validate_nc_credentials($credentials) {
         // Basic validation
         if (empty($credentials['username']) || empty($credentials['email']) || empty($credentials['password'])) {
-            return new WP_Error('missing_fields', __('Alle velden zijn verplicht', 'nc-woo-integration'));
+            return new WP_Error('missing_fields', __('All fields are required', 'nc-woo-integration'));
         }
         
         if (!is_email($credentials['email'])) {
-            return new WP_Error('invalid_email', __('Ongeldig email adres', 'nc-woo-integration'));
+            return new WP_Error('invalid_email', __('Invalid email address', 'nc-woo-integration'));
         }
         
         // Additional validation can be added here
@@ -534,7 +564,7 @@ public function handle_deployer_verification() {
         );
         
         if ($result === false) {
-            return new WP_Error('db_error', __('Database fout bij opslaan account', 'nc-woo-integration'));
+            return new WP_Error('db_error', __('Database error saving account', 'nc-woo-integration'));
         }
         
         return $wpdb->insert_id;

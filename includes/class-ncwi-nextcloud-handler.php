@@ -222,7 +222,7 @@ $signature = $params['signature'];
         ob_start();
         ?>
         <div class="ncwi-signup-handler">
-            <h2><?php _e('Complete Your Registration', 'nc-woo-integration'); ?></h2>
+            <h2><?php _e('Complete your registration', 'nc-woo-integration'); ?></h2>
             
             <div class="ncwi-nc-info">
                 <p><?php _e('You are signing up with your Nextcloud account:', 'nc-woo-integration'); ?></p>

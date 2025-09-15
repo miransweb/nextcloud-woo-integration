@@ -56,10 +56,10 @@ jQuery(document).ready(function($) {
                 if (response.success) {
                     // Check if verification is pending
                     if (response.data && response.data.status === 'pending_verification') {
-                        showNotice(response.data.message || 'Check je email voor de verificatie link.', 'info');
+                        showNotice(response.data.message || 'Check your email for the verification link.', 'info');
                         $('.ncwi-verification-notice').show();
                     } else {
-                        showNotice(response.data.message || 'Account succesvol aangemaakt.', 'success');
+                        showNotice(response.data.message || 'Account successfully created.', 'success');
                     }
                     
                     addAccountModal.hide();
@@ -141,10 +141,10 @@ jQuery(document).ready(function($) {
             },
             success: function(response) {
                 if (response.success) {
-                    showNotice('Verificatie email opnieuw verstuurd. Check je inbox!', 'success');
+                    showNotice('Verification email resend. Check your inbox!', 'success');
                     $('.ncwi-verification-notice').show();
                 } else {
-                    showNotice(response.data || 'Kon verificatie email niet versturen', 'error');
+                    showNotice(response.data || 'Could not send email verification', 'error');
                 }
             },
             error: function() {
@@ -175,15 +175,15 @@ jQuery(document).ready(function($) {
             success: function(response) {
                 if (response.success) {
                     if (response.data.verified) {
-                        showNotice('Email is geverifieerd! Pagina wordt vernieuwd...', 'success');
+                        showNotice('Email is verified! Page is being refreshed...', 'success');
                         setTimeout(function() {
                             location.reload();
                         }, 1500);
                     } else {
-                        showNotice('Email is nog niet geverifieerd. Check je inbox voor de verificatie link.', 'info');
+                        showNotice('Email not yet verified. Check your inbox for the verification link.', 'info');
                     }
                 } else {
-                    showNotice(response.data || 'Kon verificatie status niet checken', 'error');
+                    showNotice(response.data || 'Could not check verification status', 'error');
                 }
             },
             error: function() {
@@ -265,18 +265,18 @@ jQuery(document).ready(function($) {
         let html = '<div class="ncwi-account-details">';
         
         // Account info
-        html += '<h4>Account Informatie</h4>';
+        html += '<h4>Account information</h4>';
         html += '<table class="ncwi-info-table">';
-        html += '<tr><td><strong>Gebruikersnaam:</strong></td><td>' + account.nc_username + '</td></tr>';
+        html += '<tr><td><strong>Username:</strong></td><td>' + account.nc_username + '</td></tr>';
         html += '<tr><td><strong>Email:</strong></td><td>' + account.nc_email + '</td></tr>';
         html += '<tr><td><strong>Server:</strong></td><td><a href="' + account.nc_server + '" target="_blank">' + account.nc_server + '</a></td></tr>';
         html += '<tr><td><strong>Status:</strong></td><td>' + account.status + '</td></tr>';
         
         // Add verification status
         if (account.status === 'pending_verification') {
-            html += '<tr><td><strong>Email Verificatie:</strong></td><td style="color: #ff9800;">Wacht op verificatie</td></tr>';
+            html += '<tr><td><strong>Email verification:</strong></td><td style="color: #ff9800;">Awaits verification</td></tr>';
         } else if (account.status === 'active') {
-            html += '<tr><td><strong>Email Verificatie:</strong></td><td style="color: #4caf50;">Geverifieerd ✔</td></tr>';
+            html += '<tr><td><strong>Email verification:</strong></td><td style="color: #4caf50;">Verified ✔</td></tr>';
         }
         
         if (account.current_quota) {
@@ -284,7 +284,7 @@ jQuery(document).ready(function($) {
         }
         
         if (account.last_login) {
-            html += '<tr><td><strong>Laatste login:</strong></td><td>' + account.last_login + '</td></tr>';
+            html += '<tr><td><strong>Last login:</strong></td><td>' + account.last_login + '</td></tr>';
         }
         
         html += '</table>';
@@ -292,18 +292,18 @@ jQuery(document).ready(function($) {
         // Verification actions for pending accounts
         if (account.status === 'pending_verification') {
             html += '<div class="ncwi-verification-actions" style="margin: 20px 0; padding: 15px; background: #fff3cd; border: 1px solid #ffeeba; border-radius: 4px;">';
-            html += '<h4>Email Verificatie Vereist</h4>';
-            html += '<p>Dit account wacht op email verificatie. Check je inbox voor de verificatie link.</p>';
-            html += '<button class="button ncwi-resend-verification-modal-btn" data-account-id="' + account.id + '" data-email="' + account.nc_email + '">Verificatie Opnieuw Sturen</button>';
-            html += ' <button class="button ncwi-check-verification-modal-btn" data-account-id="' + account.id + '">Check Status</button>';
+            html += '<h4>Email verification required</h4>';
+            html += '<p>This account awaits email verification. Check your inbox for verification link.</p>';
+            html += '<button class="button ncwi-resend-verification-modal-btn" data-account-id="' + account.id + '" data-email="' + account.nc_email + '">Resend verification</button>';
+            html += ' <button class="button ncwi-check-verification-modal-btn" data-account-id="' + account.id + '">Check status</button>';
             html += '</div>';
         }
         
         // Linked subscriptions
         if (account.subscriptions && account.subscriptions.length > 0) {
-            html += '<h4>Gekoppelde Subscriptions</h4>';
+            html += '<h4>Linked subscriptions</h4>';
             html += '<table class="ncwi-subscriptions-table">';
-            html += '<thead><tr><th>ID</th><th>Status</th><th>Quota</th><th>Acties</th></tr></thead>';
+            html += '<thead><tr><th>ID</th><th>Status</th><th>Quota</th><th>Actions</th></tr></thead>';
             html += '<tbody>';
             
             account.subscriptions.forEach(function(sub) {
@@ -311,7 +311,7 @@ jQuery(document).ready(function($) {
                 html += '<td>#' + sub.id + '</td>';
                 html += '<td>' + sub.status + '</td>';
                 html += '<td>' + sub.quota + '</td>';
-                html += '<td><button class="button ncwi-unlink-sub-btn" data-subscription-id="' + sub.id + '" data-account-id="' + account.id + '">Ontkoppelen</button></td>';
+                html += '<td><button class="button ncwi-unlink-sub-btn" data-subscription-id="' + sub.id + '" data-account-id="' + account.id + '">Unlink</button></td>';
                 html += '</tr>';
             });
             
@@ -320,28 +320,28 @@ jQuery(document).ready(function($) {
         
         // Available subscriptions to link
         if (availableSubs && availableSubs.length > 0 && account.status === 'active') {
-            html += '<h4>Beschikbare Subscriptions</h4>';
-            html += '<p>Koppel een subscription aan dit account:</p>';
-            html += '<select id="ncwi-link-subscription-select">';
-            html += '<option value="">-- Selecteer een subscription --</option>';
+            html += '<h4>Available subscriptions</h4>';
+            html += '<p>Link a subscription to this account:</p>';
+            html += '<select id="ncwi-link-subscription-select" style="margin-bottom:15px;">';
+            html += '<option value="">-- Select a subscription --</option>';
             
             availableSubs.forEach(function(sub) {
                 html += '<option value="' + sub.id + '">' + sub.name + ' (Status: ' + sub.status + ')</option>';
             });
             
             html += '</select>';
-            html += ' <button class="button" id="ncwi-link-subscription-btn" data-account-id="' + account.id + '">Koppelen</button>';
+            html += ' <button class="button" id="ncwi-link-subscription-btn" data-account-id="' + account.id + '">Link</button>';
         }
         
         // Actions
         html += '<div class="ncwi-account-actions">';
         
         if (account.status !== 'unlinked') {
-            html += '<button class="button ncwi-unlink-account-btn" data-account-id="' + account.id + '">Account Ontkoppelen</button> ';
+            html += '<button class="button ncwi-unlink-account-btn" data-account-id="' + account.id + '">Unlink account</button> ';
         }
         
         if (!account.subscriptions || account.subscriptions.length === 0) {
-            html += '<button class="button ncwi-delete-account-btn" data-account-id="' + account.id + '">Account Verwijderen</button>';
+            html += '<button class="button ncwi-delete-account-btn" data-account-id="' + account.id + '">Delete account</button>';
         }
         
         html += '</div>';
@@ -375,9 +375,9 @@ jQuery(document).ready(function($) {
                 },
                 success: function(response) {
                     if (response.success) {
-                        showNotice('Verificatie email opnieuw verstuurd!', 'success');
+                        showNotice('Verification email resend!', 'success');
                     } else {
-                        showNotice(response.data || 'Kon verificatie email niet versturen', 'error');
+                        showNotice(response.data || 'Could not send verification email', 'error');
                     }
                 },
                 complete: function() {
@@ -404,13 +404,13 @@ jQuery(document).ready(function($) {
                 },
                 success: function(response) {
                     if (response.success && response.data.verified) {
-                        showNotice('Email is geverifieerd!', 'success');
+                        showNotice('Email has been verified!', 'success');
                         manageAccountModal.hide();
                         setTimeout(function() {
                             location.reload();
                         }, 1500);
                     } else {
-                        showNotice('Email is nog niet geverifieerd.', 'info');
+                        showNotice('Email not yet verified.', 'info');
                     }
                 },
                 complete: function() {
@@ -425,7 +425,7 @@ jQuery(document).ready(function($) {
             const subscriptionId = $('#ncwi-link-subscription-select').val();
             
             if (!subscriptionId) {
-                alert('Selecteer een subscription');
+                alert('Select a subscription');
                 return;
             }
             
@@ -443,7 +443,7 @@ jQuery(document).ready(function($) {
             
             // Close modal and reload immediately
             manageAccountModal.hide();
-            showNotice('Subscription wordt gekoppeld...', 'info');
+            showNotice('Subscription is being linked...', 'info');
             
             // Small delay to ensure AJAX request is sent
             setTimeout(function() {

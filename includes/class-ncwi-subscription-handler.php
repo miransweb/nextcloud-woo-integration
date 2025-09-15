@@ -283,7 +283,7 @@ class NCWI_Subscription_Handler {
     /**
      * Get subscription quota
      */
-    private function get_subscription_quota($subscription) {
+    public function get_subscription_quota($subscription) {
         // Check product meta for quota
         foreach ($subscription->get_items() as $item) {
             $product = $item->get_product();
@@ -434,10 +434,10 @@ class NCWI_Subscription_Handler {
             return;
         }
         
-        $subject = sprintf(__('Betaling mislukt - %s', 'nc-woo-integration'), get_bloginfo('name'));
+        $subject = sprintf(__('Payment failed - %s', 'nc-woo-integration'), get_bloginfo('name'));
         
         $message = sprintf(
-            __("Hallo %s,\n\nDe betaling voor je Nextcloud subscription is mislukt.\n\nJe Nextcloud account '%s' is tijdelijk uitgeschakeld.\n\nLog in op je account om de betaling te voltooien:\n%s\n\nMet vriendelijke groet,\n%s", 'nc-woo-integration'),
+            __("Hallo %s,\n\nThe payment for your Nextcloud subscription failed.\n\nYour Nextcloud account '%s' is temporarily disabled.\n\nLog in to your account to complete payment:\n%s\n\nKind regards,\n%s", 'nc-woo-integration'),
             $user->display_name,
             $account['nc_username'],
             wc_get_account_endpoint_url('subscriptions'),

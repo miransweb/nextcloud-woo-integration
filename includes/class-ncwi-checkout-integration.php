@@ -142,7 +142,7 @@ class NCWI_Checkout_Integration {
                 <div class="woocommerce-info">
                     <?php 
                     printf(
-                        __('Je staat op het punt om een premium subscription aan te schaffen voor je Nextcloud account: %s', 'nc-woo-integration'),
+                        __('You are about to purchase a subscription for your Nextcloud account: %s', 'nc-woo-integration'),
                         '<strong>' . esc_html($nc_data['email']) . '</strong>'
                     );
                     ?>

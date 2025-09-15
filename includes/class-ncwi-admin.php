@@ -90,7 +90,7 @@ class NCWI_Admin {
         add_settings_field(
             'ncwi_deployer_api_url',
             __('Deployer API URL', 'nc-woo-integration'),
-            [$this, 'text_field_callback'],
+            [$this, 'text_field_callback'], 
             'ncwi_api_settings',
             'ncwi_api_section',
             [
@@ -278,7 +278,7 @@ class NCWI_Admin {
         </button>
         <p class="description"><?php _e('Geheime sleutel voor signature verificatie. Deze moet exact overeenkomen met de secret in je Nextcloud Subscription Manager app.', 'nc-woo-integration'); ?></p>
         <p class="description" style="color: #d63638;">
-            <?php _e('BELANGRIJK: Kopieer de secret uit Nextcloud admin → Subscription Manager → Generate Secret', 'nc-woo-integration'); ?>
+            <?php _e('BELANGRIJK: Kopieer de secret uit Nextcloud admin → Subscription Manager → Generate Secret -> nog aanpassen, moet andersom', 'nc-woo-integration'); ?>
         </p>
     </td>
 </tr>

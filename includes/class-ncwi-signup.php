@@ -31,7 +31,7 @@ class NCWI_Signup {
         add_action('init', [$this, 'maybe_create_signup_page']);
         
         // Add signup link to login form
-        add_action('woocommerce_login_form_end', [$this, 'add_signup_link']);
+        //add_action('woocommerce_login_form_end', [$this, 'add_signup_link']);
         
         // Redirect old endpoint to new page
         add_action('template_redirect', [$this, 'redirect_old_endpoint']);

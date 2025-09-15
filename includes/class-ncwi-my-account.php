@@ -129,10 +129,10 @@ class NCWI_My_Account {
         
         // Check for messages
         if (isset($_GET['verified'])) {
-            wc_print_notice(__('Je Nextcloud account is succesvol geverifieerd!', 'nc-woo-integration'), 'success');
+            wc_print_notice(__('Your Nextcloud account has been successfully verified!', 'nc-woo-integration'), 'success');
         }
         if (isset($_GET['deployer_verified'])) {
-    wc_print_notice(__('Je email adres is succesvol geverifieerd!', 'nc-woo-integration'), 'success');
+    wc_print_notice(__('Your email address has been successfully verified!', 'nc-woo-integration'), 'success');
 }
         // Include template
         $this->include_template('my-account/nextcloud-accounts.php', [
@@ -163,6 +163,6 @@ class NCWI_My_Account {
         }
         
         // Fallback content
-        echo '<p>' . __('Template niet gevonden', 'nc-woo-integration') . '</p>';
+        echo '<p>' . __('Template not found', 'nc-woo-integration') . '</p>';
     }
 }

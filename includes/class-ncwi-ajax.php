@@ -43,14 +43,14 @@ class NCWI_Ajax {
         NCWI_Security::validate_ajax_nonce();
         
         if (!is_user_logged_in()) {
-            wp_send_json_error(__('Je moet ingelogd zijn', 'nc-woo-integration'));
+            wp_send_json_error(__('You have to be logged in', 'nc-woo-integration'));
         }
         
         $account_id = intval($_POST['account_id'] ?? 0);
         $user_id = get_current_user_id();
         
         if (!$account_id) {
-            wp_send_json_error(__('Ongeldig account ID', 'nc-woo-integration'));
+            wp_send_json_error(__('Invalid account ID', 'nc-woo-integration'));
         }
         
         // Verify ownership
@@ -62,7 +62,7 @@ class NCWI_Ajax {
         ));
         
         if (!$account) {
-            wp_send_json_error(__('Account niet gevonden', 'nc-woo-integration'));
+            wp_send_json_error(__('Account not found', 'nc-woo-integration'));
         }
         
         // Check for active subscriptions
@@ -73,7 +73,7 @@ class NCWI_Ajax {
         ));
         
         if ($active_subs > 0) {
-            wp_send_json_error(__('Kan account met actieve subscripties niet ontkoppelen', 'nc-woo-integration'));
+            wp_send_json_error(__('Can not unlink aacount with active subscription.', 'nc-woo-integration'));
         }
         
         // Update account status
@@ -86,7 +86,7 @@ class NCWI_Ajax {
         );
         
         wp_send_json_success([
-            'message' => __('Account succesvol ontkoppeld', 'nc-woo-integration')
+            'message' => __('Account succesfully unlinked.', 'nc-woo-integration')
         ]);
     }
     
@@ -97,7 +97,7 @@ class NCWI_Ajax {
         NCWI_Security::validate_ajax_nonce();
         
         if (!is_user_logged_in()) {
-            wp_send_json_error(__('Je moet ingelogd zijn', 'nc-woo-integration'));
+            wp_send_json_error(__('You have to be logged in', 'nc-woo-integration'));
         }
         
         $account_id = intval($_POST['account_id'] ?? 0);
@@ -111,7 +111,7 @@ class NCWI_Ajax {
         }
         
         wp_send_json_success([
-            'message' => __('Account succesvol verwijderd', 'nc-woo-integration')
+            'message' => __('Account succesfully deleted', 'nc-woo-integration')
         ]);
     }
     /**
@@ -121,7 +121,7 @@ public function ajax_check_verification() {
     NCWI_Security::validate_ajax_nonce();
     
     if (!is_user_logged_in()) {
-        wp_send_json_error(__('Je moet ingelogd zijn', 'nc-woo-integration'));
+        wp_send_json_error(__('You have to be logged in', 'nc-woo-integration'));
     }
     
     $account_id = intval($_POST['account_id'] ?? 0);
@@ -136,7 +136,7 @@ public function ajax_check_verification() {
     ));
     
     if (!$account) {
-        wp_send_json_error(__('Account niet gevonden', 'nc-woo-integration'));
+        wp_send_json_error(__('Account not found', 'nc-woo-integration'));
     }
     
     // Use the WP user ID as shop_user_id
@@ -147,7 +147,7 @@ public function ajax_check_verification() {
     $result = $api->check_email_verification($shop_user_id, $account->nc_email);
     
     if (is_wp_error($result)) {
-        wp_send_json_error(__('Kon verificatie status niet checken: ', 'nc-woo-integration') . $result->get_error_message());
+        wp_send_json_error(__('Could not check verification: ', 'nc-woo-integration') . $result->get_error_message());
     }
     
     $is_verified = isset($result['verified']) && $result['verified'] === true;
@@ -174,8 +174,8 @@ public function ajax_check_verification() {
     wp_send_json_success([
         'verified' => $is_verified,
         'message' => $is_verified 
-            ? __('Email is geverifieerd!', 'nc-woo-integration')
-            : __('Email is nog niet geverifieerd', 'nc-woo-integration')
+            ? __('Email verified!', 'nc-woo-integration')
+            : __('Email not yet verified', 'nc-woo-integration')
     ]);
 }
 
@@ -186,7 +186,7 @@ public function ajax_check_verification() {
         NCWI_Security::validate_ajax_nonce();
         
         if (!is_user_logged_in()) {
-            wp_send_json_error(__('Je moet ingelogd zijn', 'nc-woo-integration'));
+            wp_send_json_error(__('You have to be logged in', 'nc-woo-integration'));
         }
         
         $subscription_id = intval($_POST['subscription_id'] ?? 0);
@@ -196,7 +196,7 @@ public function ajax_check_verification() {
         // Validate subscription ownership
         $subscription = wcs_get_subscription($subscription_id);
         if (!$subscription || $subscription->get_user_id() != $user_id) {
-            wp_send_json_error(__('Ongeldige subscription', 'nc-woo-integration'));
+            wp_send_json_error(__('Invalid subscription', 'nc-woo-integration'));
         }
         
         // Validate account ownership
@@ -208,7 +208,7 @@ public function ajax_check_verification() {
         ));
         
         if (!$account) {
-            wp_send_json_error(__('Ongeldig account', 'nc-woo-integration'));
+            wp_send_json_error(__('Invalid account', 'nc-woo-integration'));
         }
         
         // Link subscription
@@ -216,7 +216,7 @@ public function ajax_check_verification() {
         $result = $subscription_handler->link_subscription_to_account($subscription_id, $account_id);
         
         if (!$result) {
-            wp_send_json_error(__('Koppeling mislukt', 'nc-woo-integration'));
+            wp_send_json_error(__('Failed to link', 'nc-woo-integration'));
         }
         
         // Trigger status sync
@@ -227,7 +227,7 @@ public function ajax_check_verification() {
         );
         
         wp_send_json_success([
-            'message' => __('Subscription succesvol gekoppeld', 'nc-woo-integration')
+            'message' => __('Subscription succesfully linked', 'nc-woo-integration')
         ]);
 
         if ($result) {
@@ -257,7 +257,7 @@ public function ajax_check_verification() {
         NCWI_Security::validate_ajax_nonce();
         
         if (!is_user_logged_in()) {
-            wp_send_json_error(__('Je moet ingelogd zijn', 'nc-woo-integration'));
+            wp_send_json_error(__('You have to be logged in', 'nc-woo-integration'));
         }
         
         $subscription_id = intval($_POST['subscription_id'] ?? 0);
@@ -267,7 +267,7 @@ public function ajax_check_verification() {
         // Validate ownership
         $subscription = wcs_get_subscription($subscription_id);
         if (!$subscription || $subscription->get_user_id() != $user_id) {
-            wp_send_json_error(__('Ongeldige subscription', 'nc-woo-integration'));
+            wp_send_json_error(__('Invalid subscription', 'nc-woo-integration'));
         }
         
         // Unlink subscription
@@ -275,11 +275,11 @@ public function ajax_check_verification() {
         $result = $subscription_handler->unlink_subscription_from_account($subscription_id, $account_id);
         
         if (!$result) {
-            wp_send_json_error(__('Ontkoppeling mislukt', 'nc-woo-integration'));
+            wp_send_json_error(__('Unlinking failed', 'nc-woo-integration'));
         }
         
         wp_send_json_success([
-            'message' => __('Subscription succesvol ontkoppeld', 'nc-woo-integration')
+            'message' => __('Subscription succesfully unlinked', 'nc-woo-integration')
         ]);
     }
     
@@ -290,7 +290,7 @@ public function ajax_check_verification() {
         NCWI_Security::validate_ajax_nonce();
         
         if (!is_user_logged_in()) {
-            wp_send_json_error(__('Je moet ingelogd zijn', 'nc-woo-integration'));
+            wp_send_json_error(__('You have to be logged in', 'nc-woo-integration'));
         }
         
         $account_id = intval($_POST['account_id'] ?? 0);
@@ -305,7 +305,7 @@ public function ajax_check_verification() {
         ), ARRAY_A);
         
         if (!$account) {
-            wp_send_json_error(__('Account niet gevonden', 'nc-woo-integration'));
+            wp_send_json_error(__('Account not found', 'nc-woo-integration'));
         }
         
         // Get fresh data from API
@@ -328,7 +328,7 @@ public function ajax_check_verification() {
         }
         
         if (!$updated_info) {
-            wp_send_json_error(__('Account info niet gevonden', 'nc-woo-integration'));
+            wp_send_json_error(__('Account details not found', 'nc-woo-integration'));
         }
         
         wp_send_json_success([
@@ -343,7 +343,7 @@ public function ajax_resend_verification() {
     NCWI_Security::validate_ajax_nonce();
     
     if (!is_user_logged_in()) {
-        wp_send_json_error(__('Je moet ingelogd zijn', 'nc-woo-integration'));
+        wp_send_json_error(__('You have to be logged in', 'nc-woo-integration'));
     }
     
     $account_id = intval($_POST['account_id'] ?? 0);
@@ -351,7 +351,7 @@ public function ajax_resend_verification() {
     $user_id = get_current_user_id();
     
     if (!$account_id || !$email) {
-        wp_send_json_error(__('Ongeldige gegevens', 'nc-woo-integration'));
+        wp_send_json_error(__('Invalid data', 'nc-woo-integration'));
     }
     
     // Verify ownership
@@ -363,7 +363,7 @@ public function ajax_resend_verification() {
     ));
     
     if (!$account) {
-        wp_send_json_error(__('Account niet gevonden', 'nc-woo-integration'));
+        wp_send_json_error(__('Account not found', 'nc-woo-integration'));
     }
     
     // Call API to resend verification
@@ -376,7 +376,7 @@ public function ajax_resend_verification() {
     }
     
     wp_send_json_success([
-        'message' => __('Verificatie email opnieuw verstuurd!', 'nc-woo-integration')
+        'message' => __('Verificatie email resend!', 'nc-woo-integration')
     ]);
 }
     
@@ -388,14 +388,14 @@ public function ajax_resend_verification() {
             NCWI_Security::validate_ajax_nonce();
             
             if (!is_user_logged_in()) {
-                wp_send_json_error(__('Je moet ingelogd zijn', 'nc-woo-integration'));
+                wp_send_json_error(__('You have to be logged in', 'nc-woo-integration'));
             }
             
             $account_id = intval($_POST['account_id'] ?? 0);
             $user_id = get_current_user_id();
             
             if (!$account_id) {
-                wp_send_json_error(__('Ongeldig account ID', 'nc-woo-integration'));
+                wp_send_json_error(__('Invalid account ID', 'nc-woo-integration'));
             }
             
             $account_manager = NCWI_Account_Manager::get_instance();
@@ -410,7 +410,7 @@ public function ajax_resend_verification() {
             }
             
             if (!$account) {
-                wp_send_json_error(__('Account niet gevonden', 'nc-woo-integration'));
+                wp_send_json_error(__('Account not found', 'nc-woo-integration'));
             }
             
             // Get available subscriptions to link
@@ -434,13 +434,31 @@ public function ajax_resend_verification() {
                         // Get subscription items
                         $items = $subscription->get_items();
                         $item_names = [];
+                        $quota = '';
                         foreach ($items as $item) {
                             $item_names[] = $item->get_name();
+                            $product = $item->get_product();
+                             if ($product && !$quota) {
+                    $quota = $product->get_meta('_ncwi_quota');
                         }
+                    }
+                    if (!$quota) {
+                $subscription_handler = NCWI_Subscription_Handler::get_instance();
+                $quota = $subscription_handler->get_subscription_quota($subscription);
+            }
+            
+            // Get parent order for order number
+            $parent_order = $subscription->get_parent();
+            $order_number = $parent_order ? $parent_order->get_order_number() : $subscription->get_id();
+            
+            // Format name with quota and order number
+            $display_name = !empty($item_names) ? implode(', ', $item_names) : 'PersonalStorage';
+            $display_name .= ' ' . $quota; 
+            $display_name .= ' Order #' . $order_number ;
                         
                         $available_subs[] = [
                             'id' => $subscription->get_id(),
-                            'name' => !empty($item_names) ? implode(', ', $item_names) : $subscription->get_formatted_order_total(),
+                            'name' => $display_name,
                             'status' => $subscription->get_status(),
                             'next_payment' => $subscription->get_date('next_payment')
                         ];
@@ -454,7 +472,7 @@ public function ajax_resend_verification() {
             ]);
             
         } catch (Exception $e) {
-            wp_send_json_error(__('Er is een fout opgetreden: ', 'nc-woo-integration') . $e->getMessage());
+            wp_send_json_error(__('An error has occurred: ', 'nc-woo-integration') . $e->getMessage());
         }
     }
 }

@@ -556,7 +556,7 @@ public function update_user_status($nc_user_id, $enabled = true, $server_url = n
     }
     
     /**
-     * Verify Nextcloud email
+     * Verify Nextcloud email >> remove, verification is send from deployer
      */
     public function verify_nextcloud_email($nc_user_id, $verification_token) {
         $endpoint = $this->nextcloud_api_url . '/ocs/v2.php/apps/registration/verify/' . $verification_token;
@@ -656,13 +656,13 @@ private function generate_nextcloud_password($length = 16) {
         }
         
         // Enhanced debug logging
-        if (defined('WP_DEBUG') && WP_DEBUG) {
+        /*if (defined('WP_DEBUG') && WP_DEBUG) {
             error_log('NCWI API Request: ' . $method . ' ' . $url);
             error_log('NCWI API Headers: ' . print_r($headers, true));
             if ($body) {
                 error_log('NCWI API Body: ' . print_r($body, true));
             }
-        }
+        }*/
         
         $response = wp_remote_request($url, $args);
         

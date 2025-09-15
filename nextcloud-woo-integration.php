@@ -3,7 +3,7 @@
  * Plugin Name: Nextcloud WooCommerce Integration
  * Plugin URI: https://github.com/miransweb/nextcloud-woo-integration/
  * Description: Integreert Nextcloud accounts met WooCommerce subscriptions
- * Version: 2.2.1
+ * Version: 2.2.3
  * Author: Miran
  * Text Domain: nc-woo-integration
  * Requires PHP: 7.4
@@ -16,7 +16,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('NCWI_VERSION', '2.2.1');
+define('NCWI_VERSION', '2.2.3');
 define('NCWI_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('NCWI_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -102,10 +102,10 @@ class Nextcloud_Woo_Integration {
                 'ajax_url' => admin_url('admin-ajax.php'),
                 'nonce' => wp_create_nonce('ncwi_ajax_nonce'),
                 'i18n' => [
-                    'confirm_unlink' => __('Weet je zeker dat je dit account wilt ontkoppelen?', 'nc-woo-integration'),
-                    'confirm_delete' => __('Weet je zeker dat je dit account wilt verwijderen?', 'nc-woo-integration'),
-                    'processing' => __('Bezig met verwerken...', 'nc-woo-integration'),
-                    'error' => __('Er is een fout opgetreden. Probeer het opnieuw.', 'nc-woo-integration')
+                    'confirm_unlink' => __('Are you sure you want to unlink this account?', 'nc-woo-integration'),
+                    'confirm_delete' => __('Are you sure you want to delete this account?', 'nc-woo-integration'),
+                    'processing' => __('Processing...', 'nc-woo-integration'),
+                    'error' => __('Something went wrong. Please try again', 'nc-woo-integration')
                 ]
             ]);
             
