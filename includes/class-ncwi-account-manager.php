@@ -183,121 +183,89 @@ error_log('NCWI Debug - account_data right before API call: ' . json_encode($acc
     
     
   /**
- * Get all Nextcloud accounts for a user
- */
-public function get_user_accounts($user_id) {
-    global $wpdb;
-    
-    $table_name = $wpdb->prefix . 'ncwi_accounts';
-    
-    // Get accounts from local database
-    $accounts = $wpdb->get_results($wpdb->prepare(
-        "SELECT a.*, 
-                GROUP_CONCAT(DISTINCT s.subscription_id) as subscription_ids,
-                GROUP_CONCAT(DISTINCT s.quota) as quotas
-         FROM $table_name a
-         LEFT JOIN {$wpdb->prefix}ncwi_account_subscriptions s ON a.id = s.account_id
-         WHERE a.user_id = %d
-         GROUP BY a.id
-         ORDER BY a.created_at DESC",
-        $user_id
-    ), ARRAY_A);
+     * Get all Nextcloud accounts for a user
+     */
+    public function get_user_accounts($user_id) {
+        global $wpdb;
+        
+        $table_name = $wpdb->prefix . 'ncwi_accounts';
+        
+        $accounts = $wpdb->get_results($wpdb->prepare(
+            "SELECT a.*, 
+                    GROUP_CONCAT(DISTINCT s.subscription_id) as subscription_ids,
+                    GROUP_CONCAT(DISTINCT s.quota) as quotas
+             FROM $table_name a
+             LEFT JOIN {$wpdb->prefix}ncwi_account_subscriptions s ON a.id = s.account_id
+             WHERE a.user_id = %d
+             GROUP BY a.id
+             ORDER BY a.created_at DESC",
+            $user_id
+        ), ARRAY_A);
 
-    if (!$accounts) {
-        return [];
-    }
-    
-    // Get active accounts from Deployer API
-    $api_result = $this->api->get_user_accounts($user_id);
-    $active_accounts = [];
-    
-    if (!is_wp_error($api_result) && !empty($api_result['success']) && !empty($api_result['data']['nc_users'])) {
-        // API returns ['success' => true, 'data' => ['nc_users' => [...], 'total_count' => x]]
-        foreach ($api_result['data']['nc_users'] as $api_account) {
-            $active_accounts[] = $api_account['user_id']; 
-        }
-    }
-    
-    // Process accounts and filter out deleted ones
-    $valid_accounts = [];
-    
-    foreach ($accounts as &$account) {
-        // Skip if no API data available (don't mark as deleted)
-        if (empty($active_accounts)) {
-            // No API data, just include the account without marking as deleted
-            $valid_accounts[] = $account;
-            continue;
+        if (!$accounts) {
+            return [];
         }
         
-        // Check if account still exists in Deployer
-        if (!in_array($account['nc_user_id'], $active_accounts)) {
-            // Account doesn't exist anymore, mark as deleted
-            $wpdb->update(
-                $wpdb->prefix . 'ncwi_accounts',
-                ['status' => 'deleted'],
-                ['id' => $account['id']],
-                ['%s'],
-                ['%d']
-            );
-            
-            // Skip this account - don't add to valid accounts
-            continue;
-        }
-        
-        // Account exists, add extra info from API if available
-        if (!is_wp_error($api_result) && !empty($api_result['data']['nc_users'])) {
-            foreach ($api_result['data']['nc_users'] as $api_account) {
-                if ($api_account['user_id'] === $account['nc_user_id']) {
-                   
-                    $account['current_quota'] = $api_account['quota'] ?? null;
-                    $account['server_url'] = $api_account['server_url'] ?? $account['nc_server'];
-                    break;
+   foreach ($accounts as &$account) {
+            // Try to get additional info from API (but don't fail if it doesn't work)
+            try {
+                $api_data = $this->api->get_user_accounts($user_id);
+                if (!is_wp_error($api_data) && !empty($api_data['data'])) {
+                    foreach ($api_data['data'] as $api_account) {
+                        if (isset($api_account['nc_user_id']) && $api_account['nc_user_id'] === $account['nc_user_id']) {
+                            $account['current_quota'] = $api_account['quota'] ?? null;
+                            $account['used_space'] = $api_account['used_space'] ?? null;
+                            $account['last_login'] = $api_account['last_login'] ?? null;
+                            break;
+                        }
+                    }
                 }
+            } catch (Exception $e) {
+                // Log error but continue
+                error_log('NCWI API Error in get_user_accounts: ' . $e->getMessage());
             }
-        }
-        
-        // Process subscription info
-        if (!empty($account['subscription_ids'])) {
-            $subscription_ids = explode(',', $account['subscription_ids']);
-            $quotas = explode(',', $account['quotas']);
             
+            // Parse subscription data
             $account['subscriptions'] = [];
-            
-            foreach ($subscription_ids as $index => $sub_id) {
-                if (function_exists('wcs_get_subscription')) {
-                    $subscription = wcs_get_subscription($sub_id);
-                    if ($subscription) {
+            if (!empty($account['subscription_ids'])) {
+                $sub_ids = array_filter(explode(',', $account['subscription_ids']));
+                $quotas = explode(',', $account['quotas'] ?? '');
+                $statuses = explode(',', $account['subscription_statuses'] ?? '');
+                
+                foreach ($sub_ids as $index => $sub_id) {
+                    if (empty($sub_id)) continue;
+                    
+                    // Check if WooCommerce Subscriptions is active
+                    if (function_exists('wcs_get_subscription')) {
+                        $subscription = wcs_get_subscription($sub_id);
+                        if ($subscription) {
+                            $account['subscriptions'][] = [
+                                'id' => $sub_id,
+                                'status' => $subscription->get_status(),
+                                'quota' => isset($quotas[$index]) ? $quotas[$index] : '',
+                                'next_payment' => $subscription->get_date('next_payment')
+                            ];
+                        }
+                    } else {
+                        // Fallback if subscriptions plugin not active
                         $account['subscriptions'][] = [
                             'id' => $sub_id,
-                            'status' => $subscription->get_status(),
+                            'status' => isset($statuses[$index]) ? $statuses[$index] : 'unknown',
                             'quota' => isset($quotas[$index]) ? $quotas[$index] : '',
-                            'next_payment' => $subscription->get_date('next_payment')
+                            'next_payment' => null
                         ];
                     }
-                } else {
-                    // Fallback if subscriptions plugin not active
-                    $account['subscriptions'][] = [
-                        'id' => $sub_id,
-                        'status' => 'unknown',
-                        'quota' => isset($quotas[$index]) ? $quotas[$index] : '',
-                        'next_payment' => null
-                    ];
                 }
             }
-        } else {
-            $account['subscriptions'] = [];
+            
+            // Clean up temporary fields
+            unset($account['subscription_ids']);
+            unset($account['quotas']);
+            unset($account['subscription_statuses']);
         }
         
-        // Clean up temporary fields
-        unset($account['subscription_ids']);
-        unset($account['quotas']);
-        
-        // Add to valid accounts
-        $valid_accounts[] = $account;
+        return $accounts;
     }
-    
-    return $valid_accounts;
-}
     
     /**
      * Delete Nextcloud account

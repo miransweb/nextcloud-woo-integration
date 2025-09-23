@@ -436,32 +436,58 @@ public function ajax_resend_verification() {
                         $item_names = [];
                         $quota = '';
                         foreach ($items as $item) {
-                            $item_names[] = $item->get_name();
-                            $product = $item->get_product();
-                             if ($product && !$quota) {
-                    $quota = $product->get_meta('_ncwi_quota');
-                        }
-                    }
-                    if (!$quota) {
-                $subscription_handler = NCWI_Subscription_Handler::get_instance();
-                $quota = $subscription_handler->get_subscription_quota($subscription);
+    $product = $item->get_product();
+    if ($product) {
+        $item_names[] = $product->get_name();
+        
+        // Get quota from product meta
+        if (!$quota) {
+            $quota = $product->get_meta('_ncwi_quota');
+            
+            // Als geen quota in meta, probeer uit de product naam te halen
+            if (!$quota) {
+                $product_name = $product->get_name();
+                // Extract storage from product name (e.g., "PersonalStorage 1000GB")
+                if (preg_match('/(\d+\s*[GT]B)/i', $product_name, $matches)) {
+                    $quota = str_replace(' ', '', strtoupper($matches[1]));
+                }
             }
-            
-            // Get parent order for order number
-            $parent_order = $subscription->get_parent();
-            $order_number = $parent_order ? $parent_order->get_order_number() : $subscription->get_id();
-            
-            // Format name with quota and order number
-            $display_name = !empty($item_names) ? implode(', ', $item_names) : 'PersonalStorage';
-            $display_name .= ' ' . $quota; 
-            $display_name .= ' Order #' . $order_number ;
-                        
-                        $available_subs[] = [
-                            'id' => $subscription->get_id(),
-                            'name' => $display_name,
-                            'status' => $subscription->get_status(),
-                            'next_payment' => $subscription->get_date('next_payment')
-                        ];
+        }
+    }
+}
+
+// Als nog steeds geen quota, gebruik de subscription handler
+if (!$quota) {
+    if (class_exists('NCWI_Subscription_Handler')) {
+        $subscription_handler = NCWI_Subscription_Handler::get_instance();
+        $quota = $subscription_handler->get_subscription_quota($subscription);
+    }
+}
+
+
+// Format name 
+$display_name = !empty($item_names) ? implode(', ', $item_names) : 'PersonalStorage';
+
+// Voeg quota toe
+if ($quota) {
+    $display_name .= ' ' . $quota;
+}
+
+
+$display_name .= ' (Subscription #' . $subscription->get_id() . ')';
+
+/*
+$parent_order = $subscription->get_parent();
+if ($parent_order) {
+    $display_name .= ' [Order #' . $parent_order->get_id() . ']';
+}*/
+
+$available_subs[] = [
+    'id' => $subscription->get_id(),
+    'name' => $display_name,
+    'status' => $subscription->get_status(),
+    'next_payment' => $subscription->get_date('next_payment')
+];
                     }
                 }
             }
