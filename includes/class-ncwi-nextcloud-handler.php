@@ -74,6 +74,38 @@ if (isset($_GET['debug_params'])) {
             'display_name' => sanitize_text_field($_GET['nc_display_name'] ?? ''),
             'action' => sanitize_text_field($_GET['action'] ?? 'subscribe')
         ];
+
+        if (is_user_logged_in()) {
+        $current_user_id = get_current_user_id();
+        $nc_data = $_SESSION['ncwi_nextcloud_data'];
+        
+        // Check of dit NC account al gekoppeld is aan deze gebruiker
+        global $wpdb;
+        $existing = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$wpdb->prefix}ncwi_accounts 
+             WHERE user_id = %d AND nc_user_id = %s AND nc_server = %s",
+            $current_user_id,
+            $nc_data['user_id'],
+            $nc_data['server']
+        ));
+        
+        if (!$existing) {
+            // Voeg het NC account toe aan de huidige gebruiker
+            $wpdb->insert(
+                $wpdb->prefix . 'ncwi_accounts',
+                [
+                    'user_id' => $current_user_id,
+                    'nc_username' => $nc_data['user_id'],
+                    'nc_email' => $nc_data['email'],
+                    'nc_server' => $nc_data['server'],
+                    'nc_user_id' => $nc_data['user_id'],
+                    'status' => 'active' // Already verified in NC
+                ]
+            );
+            
+            error_log('NCWI: Added Nextcloud account ' . $nc_data['user_id'] . ' to existing user ' . $current_user_id);
+        }
+    }
         
         // Redirect based on action
         if ($_GET['action'] === 'manage' && is_user_logged_in()) {

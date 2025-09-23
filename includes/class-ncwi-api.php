@@ -130,11 +130,19 @@ class NCWI_API {
         
         // Get shop_user_id as integer
         $shop_user_id = intval($data['wp_user_id']);
+
+    
         
-        // Check if we should skip email verification (for testing)
-        $skip_verification = get_option('ncwi_skip_email_verification', 'no') === 'yes';
-        
-        if (!$skip_verification) {
+        global $wpdb;
+    $existing_active = $wpdb->get_row($wpdb->prepare(
+        "SELECT * FROM {$wpdb->prefix}ncwi_accounts 
+         WHERE user_id = %d AND status = 'active' AND nc_email = %s",
+        $data['wp_user_id'],
+        $data['email']
+    ));
+    
+    // Als account al active is (vanaf Nextcloud), skip verificatie
+    if (!$existing_active) {
             // Check if email is verified - include email parameter
             $verification_status = $this->check_email_verification($shop_user_id, $data['email']);
             
