@@ -80,7 +80,7 @@ class NCWI_Subscription_Handler {
     
     /**
      * Handle payment complete
-     */
+     */ 
     public function handle_payment_complete($subscription) {
     error_log('NCWI: handle_payment_complete called for subscription ID: ' . $subscription->get_id());
     
