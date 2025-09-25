@@ -30,6 +30,7 @@ class NCWI_Nextcloud_Handler {
         add_shortcode('nextcloud_signup_handler', [$this, 'render_signup_handler']);
         // Hook voor redirect na login
     add_action('wp_login', [$this, 'check_nextcloud_redirect_after_login'], 10, 2);
+    
     }
     
     /**

@@ -179,10 +179,11 @@ public function ajax_check_verification() {
     ]);
 }
 
-    /**
-     * AJAX: Link subscription to account
-     */
-    public function ajax_link_subscription() {
+   /**
+ * AJAX: Link subscription to account
+ */
+public function ajax_link_subscription() {
+    try {
         NCWI_Security::validate_ajax_nonce();
         
         if (!is_user_logged_in()) {
@@ -194,6 +195,10 @@ public function ajax_check_verification() {
         $user_id = get_current_user_id();
         
         // Validate subscription ownership
+        if (!function_exists('wcs_get_subscription')) {
+            wp_send_json_error(__('WooCommerce Subscriptions not active', 'nc-woo-integration'));
+        }
+        
         $subscription = wcs_get_subscription($subscription_id);
         if (!$subscription || $subscription->get_user_id() != $user_id) {
             wp_send_json_error(__('Invalid subscription', 'nc-woo-integration'));
@@ -205,7 +210,7 @@ public function ajax_check_verification() {
             "SELECT * FROM {$wpdb->prefix}ncwi_accounts WHERE id = %d AND user_id = %d",
             $account_id,
             $user_id
-        ));
+        ), ARRAY_A);
         
         if (!$account) {
             wp_send_json_error(__('Invalid account', 'nc-woo-integration'));
@@ -219,6 +224,21 @@ public function ajax_check_verification() {
             wp_send_json_error(__('Failed to link', 'nc-woo-integration'));
         }
         
+        // If subscription is active, update Nextcloud account
+        if ($subscription->get_status() === 'active' && $account) {
+            $api = NCWI_API::get_instance();
+            
+            // Update user group to paid
+            $api->update_user_group($account['nc_user_id'], 'paid');
+            
+            // Update quota
+            $quota = $subscription_handler->get_subscription_quota($subscription);
+            $api->update_user_quota($account['nc_user_id'], $quota);
+            
+            // Enable user if disabled
+            $api->update_user_status($account['nc_user_id'], true);
+        }
+        
         // Trigger status sync
         $subscription_handler->handle_subscription_status_change(
             $subscription,
@@ -227,28 +247,14 @@ public function ajax_check_verification() {
         );
         
         wp_send_json_success([
-            'message' => __('Subscription succesfully linked', 'nc-woo-integration')
+            'message' => __('Subscription successfully linked', 'nc-woo-integration')
         ]);
-
-        if ($result) {
-    // Get the account details
-    $account = $wpdb->get_row($wpdb->prepare(
-        "SELECT * FROM {$wpdb->prefix}ncwi_accounts WHERE id = %d",
-        $account_id
-    ), ARRAY_A);
-    
-    // If subscription is active and account is in trial, move to paid group
-    if ($subscription->get_status() === 'active' && $account) {
-        $api = NCWI_API::get_instance();
-        $api->update_user_group($account['nc_user_id'], 'paid');
         
-        // Also update quota
-        $subscription_handler = NCWI_Subscription_Handler::get_instance();
-        $quota = $subscription_handler->get_subscription_quota($subscription);
-        $api->update_user_quota($account['nc_user_id'], $quota);
+    } catch (Exception $e) {
+        error_log('NCWI Error in ajax_link_subscription: ' . $e->getMessage());
+        wp_send_json_error(__('Something went wrong. Please try again', 'nc-woo-integration'));
     }
 }
-    }
     
     /**
      * AJAX: Unlink subscription from account
