@@ -89,11 +89,44 @@ class NCWI_Subscription_Handler {
     
     if (empty($linked_accounts)) {
         error_log('NCWI: No linked accounts found for subscription ID: ' . $subscription->get_id());
-        return;
+        $parent_order = $subscription->get_parent();
+        if ($parent_order) {
+            $nc_server = $parent_order->get_meta('_nextcloud_server');
+            $nc_user_id = $parent_order->get_meta('_nextcloud_user_id');
+            $nc_email = $parent_order->get_meta('_nextcloud_email');
+            
+            if ($nc_server && $nc_user_id) {
+                error_log('NCWI: Found NC data in parent order, attempting to link');
+                
+                // Roep purchase handler aan om te linken
+                $purchase_handler = NCWI_Purchase_Handler::get_instance();
+                $nc_data = [
+                    'server' => $nc_server,
+                    'user_id' => $nc_user_id,
+                    'email' => $nc_email,
+                    'quota' => $this->get_subscription_quota($subscription)
+                ];
+                $purchase_handler->activate_nextcloud_subscription($nc_data, $subscription);
+                
+                // Na linking, haal de linked accounts opnieuw op
+                $linked_accounts = $this->get_linked_accounts($subscription->get_id());
+                if (empty($linked_accounts)) {
+                    error_log('NCWI: Linking failed, no accounts found after activation');
+                    return;
+                }
+            } else {
+                error_log('NCWI: No NC data found in parent order');
+                return;
+            }
+        } else {
+            error_log('NCWI: No parent order found');
+            return;
+        }
     }
     
     error_log('NCWI: Found ' . count($linked_accounts) . ' linked accounts for this subscription');
     
+    // BESTAANDE CODE voor het verwerken van linked accounts
     foreach ($linked_accounts as $account) {
         error_log('NCWI: Processing linked account - NC User: ' . $account['nc_user_id']);
         
