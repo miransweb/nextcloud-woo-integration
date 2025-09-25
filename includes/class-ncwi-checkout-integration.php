@@ -80,12 +80,15 @@ class NCWI_Checkout_Integration {
         
         $nc_data = $_SESSION['ncwi_nextcloud_data'] ?? null;
         
-        if ($nc_data) {
-            $order->add_meta_data('_nextcloud_server', $nc_data['server']);
-            $order->add_meta_data('_nextcloud_user_id', $nc_data['user_id']);
-            $order->add_meta_data('_nextcloud_email', $nc_data['email']);
-        }
+        if ($nc_data) {  // Check of data bestaat
+        $order->update_meta_data('_nextcloud_server', $nc_data['server']);
+        $order->update_meta_data('_nextcloud_user_id', $nc_data['user_id']);
+        $order->update_meta_data('_nextcloud_email', $nc_data['email']);
+        $order->save();
     }
+    }
+
+    
     
     /**
      * Link Nextcloud account na registratie tijdens checkout
@@ -123,6 +126,7 @@ class NCWI_Checkout_Integration {
     // Als er GEEN nc_data is, doe dan NIETS - geen nep account aanmaken!
 }
     
+
     /**
      * Toon melding op productpagina als gebruiker van Nextcloud komt
      */
