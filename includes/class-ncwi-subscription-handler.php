@@ -89,44 +89,66 @@ class NCWI_Subscription_Handler {
     
     if (empty($linked_accounts)) {
         error_log('NCWI: No linked accounts found for subscription ID: ' . $subscription->get_id());
-        $parent_order = $subscription->get_parent();
-        if ($parent_order) {
-            $nc_server = $parent_order->get_meta('_nextcloud_server');
-            $nc_user_id = $parent_order->get_meta('_nextcloud_user_id');
-            $nc_email = $parent_order->get_meta('_nextcloud_email');
+
+ if (!session_id()) {
+            session_start();
+        }
+        
+        $nc_data = $_SESSION['ncwi_nextcloud_data'] ?? null;
+        $new_account_id = $_SESSION['ncwi_new_account_id'] ?? null;
+        
+        if ($nc_data && $new_account_id) {
+            error_log('NCWI: Found NC data in session, linking to new account ID: ' . $new_account_id);
             
-            if ($nc_server && $nc_user_id) {
-                error_log('NCWI: Found NC data in parent order, attempting to link');
+            // Link de subscription aan het zojuist aangemaakte account
+            $link_result = $this->link_subscription_to_account($subscription->get_id(), $new_account_id);
+            
+            if ($link_result) {
+                error_log('NCWI: Successfully linked subscription to new account');
                 
-                // Roep purchase handler aan om te linken
-                $purchase_handler = NCWI_Purchase_Handler::get_instance();
-                $nc_data = [
-                    'server' => $nc_server,
-                    'user_id' => $nc_user_id,
-                    'email' => $nc_email,
-                    'quota' => $this->get_subscription_quota($subscription)
-                ];
-                $purchase_handler->activate_nextcloud_subscription($nc_data, $subscription);
+                // Clear session data nu we klaar zijn
+                unset($_SESSION['ncwi_nextcloud_data']);
+                unset($_SESSION['ncwi_new_account_id']);
                 
-                // Na linking, haal de linked accounts opnieuw op
+                // Haal linked accounts opnieuw op
                 $linked_accounts = $this->get_linked_accounts($subscription->get_id());
-                if (empty($linked_accounts)) {
-                    error_log('NCWI: Linking failed, no accounts found after activation');
-                    return;
-                }
             } else {
-                error_log('NCWI: No NC data found in parent order');
-                return;
+                error_log('NCWI: Failed to link subscription to new account');
             }
         } else {
-            error_log('NCWI: No parent order found');
-            return;
+            // Fallback naar order meta check
+            $parent_order = $subscription->get_parent();
+            if ($parent_order) {
+                $nc_server = $parent_order->get_meta('_nextcloud_server');
+                $nc_user_id = $parent_order->get_meta('_nextcloud_user_id');
+                $nc_email = $parent_order->get_meta('_nextcloud_email');
+                
+                if ($nc_server && $nc_user_id) {
+                    error_log('NCWI: Found NC data in parent order, attempting to link');
+                    
+                    $purchase_handler = NCWI_Purchase_Handler::get_instance();
+                    $nc_data = [
+                        'server' => $nc_server,
+                        'user_id' => $nc_user_id,
+                        'email' => $nc_email,
+                        'quota' => $this->get_subscription_quota($subscription)
+                    ];
+                    $purchase_handler->activate_nextcloud_subscription($nc_data, $subscription);
+                    
+                    $linked_accounts = $this->get_linked_accounts($subscription->get_id());
+                }
+            }
         }
+    }
+    
+    if (empty($linked_accounts)) {
+        error_log('NCWI: Still no linked accounts after all attempts');
+        return;
     }
     
     error_log('NCWI: Found ' . count($linked_accounts) . ' linked accounts for this subscription');
     
-    // BESTAANDE CODE voor het verwerken van linked accounts
+    // Process linked accounts
     foreach ($linked_accounts as $account) {
         error_log('NCWI: Processing linked account - NC User: ' . $account['nc_user_id']);
         
@@ -135,12 +157,11 @@ class NCWI_Subscription_Handler {
         
         if (is_wp_error($group_result)) {
             error_log('NCWI ERROR: Failed to update user group: ' . $group_result->get_error_message());
-            // Continue with other updates even if group update fails
         } else {
             error_log('NCWI: Successfully updated user group to paid');
         }
         
-        // Update quota based on subscription
+        // Update quota
         $quota = $this->get_subscription_quota($subscription);
         error_log('NCWI: Setting quota to: ' . $quota);
         
@@ -161,13 +182,12 @@ class NCWI_Subscription_Handler {
             error_log('NCWI: Successfully enabled user');
         }
         
-        // Update local database to track the active subscription
+        // Update local database
         $this->update_account_subscription_status($account['id'], $subscription->get_id(), 'active');
         
         error_log('NCWI: Completed processing for linked account ' . $account['nc_user_id']);
     }
 }
-    
     /**
      * Handle payment failed
      */

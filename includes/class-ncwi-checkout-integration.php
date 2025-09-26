@@ -102,7 +102,7 @@ class NCWI_Checkout_Integration {
     
     // ALLEEN koppelen als er Nextcloud data is EN als het een bestaand NC account is
     if ($nc_data && !empty($nc_data['server']) && !empty($nc_data['user_id'])) {
-        // Link het Nextcloud account aan de nieuwe WordPress gebruiker
+        // Link het Nextcloud account aan de nieuwe shop gebruiker
         global $wpdb;
         
         $wpdb->insert(
@@ -120,10 +120,13 @@ class NCWI_Checkout_Integration {
             ['%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s']
         );
         
-        // Clear session data na gebruik
-        unset($_SESSION['ncwi_nextcloud_data']);
+        if ($account_id) {
+            // Store de account ID in session voor later gebruik
+            $_SESSION['ncwi_new_account_id'] = $wpdb->insert_id;
+            
+            error_log('NCWI: Added verified Nextcloud account ' . $nc_data['user_id'] . ' to new user ' . $customer_id);
+        }
     }
-    // Als er GEEN nc_data is, doe dan NIETS - geen nep account aanmaken!
 }
     
 
