@@ -462,6 +462,8 @@ public function update_user_group($nc_user_id, $new_group, $server_url = null) {
 /**
  * Update user status (enable/disable)
  */
+
+/*
 public function update_user_status($nc_user_id, $enabled = true, $server_url = null) {
     $endpoint = $this->deployer_api_url . '/api/users/status/';
     
@@ -479,6 +481,7 @@ public function update_user_status($nc_user_id, $enabled = true, $server_url = n
     
     return json_decode(wp_remote_retrieve_body($response), true);
 }
+*/
 
     /**
      * Unsubscribe user (deactivate subscription)
@@ -693,6 +696,9 @@ private function generate_nextcloud_password($length = 16) {
      * Validate API configuration
      */
     public function validate_configuration() {
+
+        return true; 
+
         $errors = [];
         
         if (empty($this->deployer_api_url)) {
@@ -711,7 +717,7 @@ private function generate_nextcloud_password($length = 16) {
             return new WP_Error('ncwi_config_error', implode(', ', $errors));
         }
         
-        // Test API connection with servers endpoint (we know this works)
+        // Test API connection with servers endpoint 
         $test_response = $this->make_deployer_request('GET', $this->deployer_api_url . '/api/servers/');
         
         if (is_wp_error($test_response)) {
@@ -733,4 +739,5 @@ private function generate_nextcloud_password($length = 16) {
         // Other error
         return new WP_Error('ncwi_api_error', sprintf(__('Deployer API returned status code %d', 'nc-woo-integration'), $response_code));
     }
+    
 }

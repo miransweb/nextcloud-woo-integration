@@ -236,7 +236,7 @@ public function ajax_link_subscription() {
             $api->update_user_quota($account['nc_user_id'], $quota);
             
             // Enable user if disabled
-            $api->update_user_status($account['nc_user_id'], true);
+            //$api->update_user_status($account['nc_user_id'], true);
         }
         
         // Trigger status sync

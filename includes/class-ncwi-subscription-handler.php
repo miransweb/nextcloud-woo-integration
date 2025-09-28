@@ -97,26 +97,23 @@ class NCWI_Subscription_Handler {
         $nc_data = $_SESSION['ncwi_nextcloud_data'] ?? null;
         $new_account_id = $_SESSION['ncwi_new_account_id'] ?? null;
         
-        if ($nc_data && $new_account_id) {
-            error_log('NCWI: Found NC data in session, linking to new account ID: ' . $new_account_id);
+       if ($new_account_id) {
+            error_log('NCWI: Found account ID from registration: ' . $new_account_id);
             
-            // Link de subscription aan het zojuist aangemaakte account
+            // Link subscription direct
             $link_result = $this->link_subscription_to_account($subscription->get_id(), $new_account_id);
             
             if ($link_result) {
-                error_log('NCWI: Successfully linked subscription to new account');
+                error_log('NCWI: Successfully linked subscription to account');
                 
-                // Clear session data nu we klaar zijn
+                // Clear session data
                 unset($_SESSION['ncwi_nextcloud_data']);
                 unset($_SESSION['ncwi_new_account_id']);
                 
                 // Haal linked accounts opnieuw op
                 $linked_accounts = $this->get_linked_accounts($subscription->get_id());
-            } else {
-                error_log('NCWI: Failed to link subscription to new account');
-            }
-        } else {
-            // Fallback naar order meta check
+            } } else {
+            // Fallback: check order meta
             $parent_order = $subscription->get_parent();
             if ($parent_order) {
                 $nc_server = $parent_order->get_meta('_nextcloud_server');
@@ -124,18 +121,23 @@ class NCWI_Subscription_Handler {
                 $nc_email = $parent_order->get_meta('_nextcloud_email');
                 
                 if ($nc_server && $nc_user_id) {
-                    error_log('NCWI: Found NC data in parent order, attempting to link');
+                    error_log('NCWI: Found NC data in order meta');
                     
-                    $purchase_handler = NCWI_Purchase_Handler::get_instance();
-                    $nc_data = [
-                        'server' => $nc_server,
-                        'user_id' => $nc_user_id,
-                        'email' => $nc_email,
-                        'quota' => $this->get_subscription_quota($subscription)
-                    ];
-                    $purchase_handler->activate_nextcloud_subscription($nc_data, $subscription);
+                    // Check of account bestaat
+                    global $wpdb;
+                    $account = $wpdb->get_row($wpdb->prepare(
+                        "SELECT id FROM {$wpdb->prefix}ncwi_accounts 
+                         WHERE nc_user_id = %s AND nc_server = %s AND user_id = %d",
+                        $nc_user_id,
+                        $nc_server,
+                        $subscription->get_user_id()
+                    ));
                     
-                    $linked_accounts = $this->get_linked_accounts($subscription->get_id());
+                    if ($account) {
+                        // Link subscription
+                        $this->link_subscription_to_account($subscription->get_id(), $account->id);
+                        $linked_accounts = $this->get_linked_accounts($subscription->get_id());
+                    }
                 }
             }
         }
@@ -174,13 +176,14 @@ class NCWI_Subscription_Handler {
         }
         
         // Enable user if disabled
-        $status_result = $this->api->update_user_status($account['nc_user_id'], true);
+       /* $status_result = $this->api->update_user_status($account['nc_user_id'], true);
         
         if (is_wp_error($status_result)) {
             error_log('NCWI ERROR: Failed to update user status: ' . $status_result->get_error_message());
         } else {
             error_log('NCWI: Successfully enabled user');
         }
+            */
         
         // Update local database
         $this->update_account_subscription_status($account['id'], $subscription->get_id(), 'active');
@@ -196,7 +199,7 @@ class NCWI_Subscription_Handler {
         
         foreach ($linked_accounts as $account) {
             // Disable user access
-            $this->api->update_user_status($account['nc_user_id'], false);
+            //$this->api->update_user_status($account['nc_user_id'], false);
             
             // Update local status
             $this->update_account_subscription_status($account['id'], $subscription->get_id(), 'suspended');
@@ -375,7 +378,7 @@ class NCWI_Subscription_Handler {
      */
     private function activate_subscription($account, $subscription) {
         // Enable user
-        $this->api->update_user_status($account['nc_user_id'], true);
+       // $this->api->update_user_status($account['nc_user_id'], true);
         
         // Update quota
         $quota = $this->get_subscription_quota($subscription);
@@ -392,12 +395,14 @@ class NCWI_Subscription_Handler {
      * Deactivate subscription
      */
     private function deactivate_subscription($account, $subscription) {
-        // Disable user
-        $this->api->update_user_status($account['nc_user_id'], false);
-        
-        // Update local status
-        $this->update_account_subscription_status($account['id'], $subscription->get_id(), 'inactive');
-    }
+    // Move user from paid to unsubscribed group
+    $this->api->update_user_group($account['nc_user_id'], 'unsubscribed');
+    
+    // Update local status
+    $this->update_account_subscription_status($account['id'], $subscription->get_id(), 'inactive');
+    
+    error_log('NCWI: Moved user ' . $account['nc_user_id'] . ' to unsubscribed group');
+}
     
     /**
      * Handle expired subscription

@@ -301,16 +301,27 @@ error_log('NCWI Debug - account_data right before API call: ' . json_encode($acc
      * Handle user registration
      */
     public function handle_user_registration($user_id) {
-        // Check if auto-create is enabled
-        if (get_option('ncwi_auto_create_on_register', 'no') !== 'yes') {
-            return;
-        }
-        
-        // Create trial account
+        // check if origin is nc
+       if (!session_id()) {
+        session_start();
+    }
+    
+    $nc_data = $_SESSION['ncwi_nextcloud_data'] ?? null;
+    
+    if ($nc_data && !empty($nc_data['server']) && !empty($nc_data['user_id'])) {
+        // We komen van Nextcloud, het NC account bestaat al
+        // Dit wordt afgehandeld in checkout integration
+        error_log('NCWI: Skip creating new NC account - user has existing NC account from ' . $nc_data['server']);
+        return;
+    }
+    
+    // Normale flow - alleen als auto-create aan staat EN niet van NC komt
+    if (get_option('ncwi_auto_create_on_register', 'no') === 'yes') {
         $this->create_account($user_id, [
             'quota' => get_option('ncwi_trial_quota', '1GB')
         ]);
     }
+}
     
     /**
      * AJAX handler for account creation

@@ -100,31 +100,49 @@ class NCWI_Checkout_Integration {
     
     $nc_data = $_SESSION['ncwi_nextcloud_data'] ?? null;
     
-    // ALLEEN koppelen als er Nextcloud data is EN als het een bestaand NC account is
-    if ($nc_data && !empty($nc_data['server']) && !empty($nc_data['user_id'])) {
-        // Link het Nextcloud account aan de nieuwe shop gebruiker
+   if ($nc_data && !empty($nc_data['server']) && !empty($nc_data['user_id'])) {
         global $wpdb;
         
-        $wpdb->insert(
-            $wpdb->prefix . 'ncwi_accounts',
-            [
-                'user_id' => $customer_id,
-                'nc_user_id' => $nc_data['user_id'],
-                'nc_email' => $nc_data['email'],
-                'nc_server' => $nc_data['server'],
-                'nc_display_name' => $nc_data['display_name'] ?? '',
-                'nc_username' => $nc_data['user_id'], // Voeg username toe
-                'status' => 'active', // Dit is een bestaand NC account
-                'created_at' => current_time('mysql')
-            ],
-            ['%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s']
-        );
+        // Check of dit NC account al bestaat in WordPress database
+        $existing = $wpdb->get_row($wpdb->prepare(
+            "SELECT id FROM {$wpdb->prefix}ncwi_accounts 
+             WHERE nc_user_id = %s AND nc_server = %s",
+            $nc_data['user_id'],
+            $nc_data['server']
+        ));
         
-        if ($account_id) {
-            // Store de account ID in session voor later gebruik
-            $_SESSION['ncwi_new_account_id'] = $wpdb->insert_id;
+        if ($existing) {
+            // Account bestaat al, update de user_id naar de nieuwe WordPress user
+            $wpdb->update(
+                $wpdb->prefix . 'ncwi_accounts',
+                [
+                    'user_id' => $customer_id,
+                    'status' => 'active' // Zorg dat status active is
+                ],
+                ['id' => $existing->id],
+                ['%d', '%s'],
+                ['%d']
+            );
+            $_SESSION['ncwi_new_account_id'] = $existing->id;
+            error_log('NCWI: Updated existing NC account ' . $nc_data['user_id'] . ' to WP user ' . $customer_id);
+        } else {
+            // NC account bestaat nog niet in WordPress, voeg toe als active
+            $wpdb->insert(
+                $wpdb->prefix . 'ncwi_accounts',
+                [
+                    'user_id' => $customer_id,
+                    'nc_user_id' => $nc_data['user_id'],
+                    'nc_email' => $nc_data['email'],
+                    'nc_server' => $nc_data['server'],
+                    'nc_username' => $nc_data['user_id'],
+                    'status' => 'active', // Direct active - komt van bestaand NC account
+                    'created_at' => current_time('mysql')
+                ],
+                ['%d', '%s', '%s', '%s', '%s', '%s', '%s']
+            );
             
-            error_log('NCWI: Added verified Nextcloud account ' . $nc_data['user_id'] . ' to new user ' . $customer_id);
+            $_SESSION['ncwi_new_account_id'] = $wpdb->insert_id;
+            error_log('NCWI: Added existing NC account ' . $nc_data['user_id'] . ' as active for WP user ' . $customer_id);
         }
     }
 }

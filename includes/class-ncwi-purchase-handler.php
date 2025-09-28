@@ -53,55 +53,57 @@ public function add_nextcloud_notice_after_purchase($order_id) {
      * Activate Nextcloud subscription via API
      */
     public function activate_nextcloud_subscription($nc_data, $subscription) {
-         // Get the API instance
-        $api = NCWI_API::get_instance();
-        $account_manager = NCWI_Account_Manager::get_instance();
+    $api = NCWI_API::get_instance();
     $subscription_handler = NCWI_Subscription_Handler::get_instance();
-
-    $user_id = $subscription->get_user_id();
-        
-        // Get subscription details
-        $items = $subscription->get_items();
-        $quota = $nc_data['quota'] ?? '10GB';
-        
-        $user_accounts = $account_manager->get_user_accounts($user_id);
     
-    // Check of er al een account is met deze NC user/server
-    $existing_account = null;
-    foreach ($user_accounts as $account) {
-        if ($account['nc_user_id'] === $nc_data['user_id'] && 
-            $account['nc_server'] === $nc_data['server']) {
-            $existing_account = $account;
-            break;
-        }
-    }
- 
-   if ($existing_account) {
-        // Link subscription
-        $link_result = $subscription_handler->link_subscription_to_account($subscription->get_id(), $existing_account['id']);
-        $api->subscribe_user($nc_data['user_id'], $nc_data['server'], $quota);
-        $api->update_user_group($nc_data['user_id'], 'paid', $nc_data['server']);
-    } else {
-         // Maak nieuw account
-        $account_data = [
-            'nc_server' => $nc_data['server'],
-            'nc_user_id' => $nc_data['user_id'],
-            'nc_username' => $nc_data['user_id'],
-            'nc_email' => $nc_data['email'] ?? '',
-            'quota' => $quota
-        ];
+    $user_id = $subscription->get_user_id();
+    
+    global $wpdb;
+    
+    // Check of er al een NC account bestaat voor deze gebruiker
+
+    $existing_account = $wpdb->get_row($wpdb->prepare(
+        "SELECT * FROM {$wpdb->prefix}ncwi_accounts 
+         WHERE user_id = %d 
+         AND (nc_email = %s OR nc_user_id = %s)
+         ORDER BY id DESC LIMIT 1",
+        $user_id,
+        $nc_data['email'],
+        $nc_data['user_id']
+    ), ARRAY_A);
+    
+    if ($existing_account) {
+        error_log('NCWI: Found existing account ID: ' . $existing_account['id']);
         
-        $account_id = $account_manager->create_account($user_id, $account_data);
-        if (!is_wp_error($account_id)) {
-            // Link subscription to the new account
-            $subscription_handler->link_subscription_to_account($subscription->get_id(), $account_id);
+        // Update het account 
+        $wpdb->update(
+            $wpdb->prefix . 'ncwi_accounts',
+            [
+                'nc_server' => $nc_data['server'],
+                'nc_user_id' => $nc_data['user_id'],
+                'status' => 'active'
+            ],
+            ['id' => $existing_account['id']],
+            ['%s', '%s', '%s'],
+            ['%d']
+        );
+        
+        // Link de subscription
+        $link_result = $subscription_handler->link_subscription_to_account($subscription->get_id(), $existing_account['id']);
+        
+        if ($link_result) {
+            error_log('NCWI: Successfully linked subscription to existing account');
             
-            // Update user via API
-            $api->subscribe_user($nc_data['user_id'], $nc_data['server'], $quota);
+            // Update user group en quota via API
+            $quota = $subscription_handler->get_subscription_quota($subscription);
             $api->update_user_group($nc_data['user_id'], 'paid', $nc_data['server']);
+            $api->update_user_quota($nc_data['user_id'], $quota, $nc_data['server']);
         } else {
-            error_log('NCWI: Failed to create account: ' . $account_id->get_error_message());
+            error_log('NCWI: Failed to link subscription to existing account');
         }
+    } else {
+        error_log('NCWI ERROR: No existing account found - this should not happen for NC users!');
+        error_log('NCWI: User ID: ' . $user_id . ', Email: ' . $nc_data['email'] . ', NC User: ' . $nc_data['user_id']);
     }
 }
 
