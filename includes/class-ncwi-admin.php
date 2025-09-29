@@ -74,7 +74,7 @@ class NCWI_Admin {
         
         // General Settings
         register_setting('ncwi_general_settings', 'ncwi_enable_email_verification');
-        register_setting('ncwi_general_settings', 'ncwi_auto_create_on_register');
+       // register_setting('ncwi_general_settings', 'ncwi_auto_create_on_register');
         register_setting('ncwi_general_settings', 'ncwi_default_quota');
         register_setting('ncwi_general_settings', 'ncwi_trial_quota');
         register_setting('ncwi_general_settings', 'ncwi_sync_interval');
@@ -155,17 +155,7 @@ class NCWI_Admin {
             ]
         );
         
-        add_settings_field(
-            'ncwi_auto_create_on_register',
-            __('Automatisch Account Aanmaken', 'nc-woo-integration'),
-            [$this, 'checkbox_field_callback'],
-            'ncwi_general_settings',
-            'ncwi_general_section',
-            [
-                'label_for' => 'ncwi_auto_create_on_register',
-                'description' => __('Maak automatisch een Nextcloud trial account aan bij WordPress registratie', 'nc-woo-integration')
-            ]
-        );
+       
         
         add_settings_field(
             'ncwi_default_quota',

@@ -30,7 +30,9 @@ class NCWI_Nextcloud_Handler {
         add_shortcode('nextcloud_signup_handler', [$this, 'render_signup_handler']);
         // Hook voor redirect na login
     add_action('wp_login', [$this, 'check_nextcloud_redirect_after_login'], 10, 2);
-    
+         // Clear NC session data on logout
+    add_action('wp_logout', [$this, 'clear_nextcloud_session']);
+    add_action('clear_auth_cookie', [$this, 'clear_nextcloud_session']);
     }
     
     /**
@@ -237,6 +239,24 @@ $signature = $params['signature'];
 
     return hash_equals($expected_signature, $signature);
     }
+
+    /**
+ * Clear Nextcloud session data on logout
+ */
+public function clear_nextcloud_session() {
+    if (!session_id()) {
+        session_start();
+    }
+    
+    if (isset($_SESSION['ncwi_nextcloud_data'])) {
+        unset($_SESSION['ncwi_nextcloud_data']);
+    }
+    
+    // Destroy hele sessie als er verder niks in zit
+    if (empty($_SESSION)) {
+        session_destroy();
+    }
+}
     
     /**
      * Render signup handler

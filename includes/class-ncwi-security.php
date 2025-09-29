@@ -25,7 +25,7 @@ class NCWI_Security {
         add_filter('ncwi_decrypt_data', [$this, 'decrypt_data'], 10, 1);
         
         // Rate limiting
-        add_action('init', [$this, 'init_rate_limiting']);
+        //add_action('init', [$this, 'init_rate_limiting']);
         
         // Security headers
         add_action('send_headers', [$this, 'add_security_headers']);

@@ -309,18 +309,12 @@ error_log('NCWI Debug - account_data right before API call: ' . json_encode($acc
     $nc_data = $_SESSION['ncwi_nextcloud_data'] ?? null;
     
     if ($nc_data && !empty($nc_data['server']) && !empty($nc_data['user_id'])) {
-        // We komen van Nextcloud, het NC account bestaat al
-        // Dit wordt afgehandeld in checkout integration
+        // origin is Nextcloud, het NC account bestaat al
         error_log('NCWI: Skip creating new NC account - user has existing NC account from ' . $nc_data['server']);
         return;
     }
     
-    // Normale flow - alleen als auto-create aan staat EN niet van NC komt
-    if (get_option('ncwi_auto_create_on_register', 'no') === 'yes') {
-        $this->create_account($user_id, [
-            'quota' => get_option('ncwi_trial_quota', '1GB')
-        ]);
-    }
+    
 }
     
     /**
@@ -475,6 +469,32 @@ public function handle_deployer_verification() {
         ));
        
     }
+
+    $accounts = $wpdb->get_results($wpdb->prepare(
+    "SELECT * FROM {$wpdb->prefix}ncwi_accounts 
+     WHERE user_id = %d AND status = 'active'
+     ORDER BY created_at DESC
+     LIMIT 1",
+    $user_id
+));
+
+if (!empty($accounts)) {
+    $account = $accounts[0];
+    
+    // Probeer het NC account aan te maken via Deployer
+    $result = $api->create_nextcloud_account([
+        'wp_user_id' => $user_id,
+        'username' => $account->nc_username,
+        'email' => $account->nc_email,
+        'quota' => get_option('ncwi_trial_quota', '1GB')
+    ]);
+    
+    if (!is_wp_error($result) && isset($result['success']) && $result['success']) {
+        error_log('NCWI: Nextcloud account created after verification for user ' . $account->nc_email);
+    } else {
+        error_log('NCWI: Failed to create Nextcloud account after verification');
+    }
+}
     
     // Success! Redirect to account page
     wp_redirect(wc_get_account_endpoint_url('nextcloud-accounts') . '?deployer_verified=1');

@@ -214,8 +214,13 @@ class NCWI_Subscription_Handler {
      */
     public function handle_subscription_created($subscription, $order, $recurring_cart) {
         $user_id = $subscription->get_user_id();
+
+        $subscription->add_order_note(
+        __('Nextcloud account required. User must create or link a Nextcloud account to activate this subscription.', 'nc-woo-integration')
+    );
         
         // Check if user has NC accounts
+        /*
         $account_manager = NCWI_Account_Manager::get_instance();
         $accounts = $account_manager->get_user_accounts($user_id);
         
@@ -228,7 +233,7 @@ class NCWI_Subscription_Handler {
             if (!is_wp_error($account_id)) {
                 $this->link_subscription_to_account($subscription->get_id(), $account_id);
             }
-        }
+        } */
     }
     
     /**
@@ -340,27 +345,61 @@ class NCWI_Subscription_Handler {
      * Get subscription quota
      */
     public function get_subscription_quota($subscription) {
-        // Check product meta for quota
-        foreach ($subscription->get_items() as $item) {
-            $product = $item->get_product();
-            if ($product) {
-                $quota = $product->get_meta('_ncwi_quota');
-                if ($quota) {
-                    return $quota;
+    error_log('NCWI Debug - Getting quota for subscription ID: ' . $subscription->get_id());
+    
+    foreach ($subscription->get_items() as $item) {
+        $product = $item->get_product();
+        if ($product) {
+            // Get the SKU
+            $sku = $product->get_sku();
+            error_log('NCWI Debug - Product SKU: ' . $sku);
+            error_log('NCWI Debug - Product name: ' . $product->get_name());
+            
+            // Extract quota from SKU (e.g., CONS-5000GB-3Months)
+            if (preg_match('/CONS-(\d+)(GB|TB)-/i', $sku, $matches)) {
+                $amount = $matches[1];
+                $unit = strtoupper($matches[2]);
+                
+                // Convert TB to GB if needed
+                if ($unit === 'TB') {
+                    $amount = $amount * 1000;
+                    $unit = 'GB';
+                }
+                
+                $quota = $amount . $unit;
+                error_log('NCWI Debug - Quota extracted from SKU: ' . $quota);
+                return $quota;
+            }
+            
+            // Fallback: check product meta
+            $quota = $product->get_meta('_ncwi_quota');
+            if ($quota) {
+                error_log('NCWI Debug - Quota from meta: ' . $quota);
+                return $quota;
+            }
+            
+            // Fallback: check variation description or attributes
+            if ($product->is_type('variation')) {
+                $attributes = $product->get_variation_attributes();
+                error_log('NCWI Debug - Variation attributes: ' . json_encode($attributes));
+                
+                foreach ($attributes as $key => $value) {
+                    // Check if attribute contains quota info
+                    if (preg_match('/(\d+)\s*(GB|TB)/i', $value, $matches)) {
+                        $quota = $matches[1] . strtoupper($matches[2]);
+                        error_log('NCWI Debug - Quota from attributes: ' . $quota);
+                        return $quota;
+                    }
                 }
             }
         }
-        
-        // Default quota based on subscription total
-        $total = $subscription->get_total();
-        if ($total >= 20) {
-            return '100GB';
-        } elseif ($total >= 10) {
-            return '50GB';
-        } else {
-            return '10GB';
-        }
     }
+    
+    // Final fallback
+    $fallback = '10GB';
+    error_log('NCWI Debug - Using fallback quota: ' . $fallback);
+    return $fallback;
+}
     
     /**
      * Get item quota

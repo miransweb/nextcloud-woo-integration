@@ -116,6 +116,11 @@ class NCWI_API {
             error_log('NCWI Debug - data[' . $key . '] = ' . $value);
         }
     }
+error_log('NCWI Debug - About to create/get shop user');
+error_log('NCWI Debug - WP User email: ' . ($user ? $user->user_email : 'no user'));
+error_log('NCWI Debug - NC account email: ' . $data['email']);
+error_log('NCWI Debug - NC username: ' . $data['username']);
+
         // First ensure shop user exists
         $user = get_user_by('id', $data['wp_user_id']);
         $shop_user_result = $this->create_shop_user([
@@ -124,9 +129,9 @@ class NCWI_API {
             'name' => $user ? $user->display_name : $data['username']
         ]);
         
-        if (is_wp_error($shop_user_result)) {
-            return $shop_user_result;
-        }
+       if (is_wp_error($shop_user_result) && $shop_user_result->get_error_code() !== 'shop_user_exists') {
+    return $shop_user_result;
+}
         
         // Get shop_user_id as integer
         $shop_user_id = intval($data['wp_user_id']);
@@ -200,6 +205,11 @@ class NCWI_API {
             }
         }
         
+
+        error_log('NCWI Debug - Creating NC user with:');
+error_log('NCWI Debug - shop_user_id: ' . $shop_user_id);
+error_log('NCWI Debug - email for NC: ' . sanitize_email($data['email']));
+error_log('NCWI Debug - username for NC: ' . ($data['username'] ?? 'not set'));
         // Try to create NC user (only if verified or skip is enabled)
         $endpoint = $this->deployer_api_url . '/api/users/';
         
@@ -209,11 +219,14 @@ class NCWI_API {
         $body = [
             'shop_user_id' => $shop_user_id,
             'email' => sanitize_email($data['email']),
+            'username' => $data['username'] ?? $data['email'], 
             'password' => $password
         ];
 
         error_log('NCWI Debug - shop_user_id before body: ' . $shop_user_id);
 error_log('NCWI Debug - Body to send to API: ' . json_encode($body));
+
+
         
         $response = $this->make_deployer_request('POST', $endpoint, $body);
         
