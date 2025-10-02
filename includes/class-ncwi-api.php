@@ -25,18 +25,41 @@ class NCWI_API {
     private function load_settings() {
         $this->deployer_api_url = get_option('ncwi_deployer_api_url');
         $this->deployer_api_key = get_option('ncwi_deployer_api_key');
-        $this->nextcloud_api_url = get_option('ncwi_nextcloud_api_url');
+       // $this->nextcloud_api_url = get_option('ncwi_nextcloud_api_url');
     }
     
     /**
      * Create or get shop user
      */
     public function create_shop_user($data) {
-        $endpoint = $this->deployer_api_url . '/api/shop-users/';
-        
-        // Use WP user ID as integer shop_user_id
         $shop_user_id = intval($data['wp_user_id']);
         
+        // First check if shop user already exists
+        $check_endpoint = $this->deployer_api_url . '/api/shop-users/' . $shop_user_id . '/';
+        $check_response = $this->make_deployer_request('GET', $check_endpoint);
+        
+        if (!is_wp_error($check_response)) {
+            $response_code = wp_remote_retrieve_response_code($check_response);
+            
+            if ($response_code === 200) {
+                // Shop user exists already
+                error_log('NCWI: Shop user already exists, not creating duplicate');
+                $existing_data = json_decode(wp_remote_retrieve_body($check_response), true);
+                
+                // Maybe update email if changed
+                if (isset($existing_data['email']) && $existing_data['email'] !== $data['email']) {
+                    $update_endpoint = $this->deployer_api_url . '/api/shop-users/' . $shop_user_id . '/';
+                    $update_response = $this->make_deployer_request('PATCH', $update_endpoint, [
+                        'email' => $data['email']
+                    ]);
+                }
+                
+                return $existing_data;
+            }
+        }
+        
+        // Only create if doesn't exist
+        $endpoint = $this->deployer_api_url . '/api/shop-users/';
         $body = [
             'shop_user_id' => $shop_user_id,
             'name' => $data['name'] ?? $data['email'],
@@ -57,6 +80,33 @@ class NCWI_API {
         }
         
         return $result;
+    }
+    
+    /**
+     * Check if NC user exists
+     */
+    public function check_nc_user_exists($email_or_userid, $server_url = null) {
+        $endpoint = $this->deployer_api_url . '/api/users/check/';
+        
+        $params = [
+            'user_id' => $email_or_userid,
+            'server_url' => $server_url ?? $this->nextcloud_api_url
+        ];
+        
+        $url = add_query_arg($params, $endpoint);
+        $response = $this->make_deployer_request('GET', $url);
+        
+        if (is_wp_error($response)) {
+            return false;
+        }
+        
+        $response_code = wp_remote_retrieve_response_code($response);
+        if ($response_code === 200) {
+            $data = json_decode(wp_remote_retrieve_body($response), true);
+            return isset($data['exists']) && $data['exists'] === true;
+        }
+        
+        return false;
     }
     
     /**
@@ -85,7 +135,6 @@ class NCWI_API {
     public function check_email_verification($shop_user_id, $email = null) {
         $endpoint = $this->deployer_api_url . '/api/email/verification/check/';
         
-        // Use GET request with query parameters - include email if provided
         $params = ['shop_user_id' => intval($shop_user_id)];
         if ($email) {
             $params['email'] = sanitize_email($email);
@@ -106,21 +155,72 @@ class NCWI_API {
      * Create Nextcloud account via Deployer
      */
     public function create_nextcloud_account($data) {
-         error_log('NCWI Debug - create_nextcloud_account - func_num_args: ' . func_num_args());
-    error_log('NCWI Debug - create_nextcloud_account - gettype data: ' . gettype($data));
-    error_log('NCWI Debug - create_nextcloud_account - json_encode data: ' . json_encode($data));
-    
-    if (is_array($data)) {
-        error_log('NCWI Debug - data is array with count: ' . count($data));
-        foreach ($data as $key => $value) {
-            error_log('NCWI Debug - data[' . $key . '] = ' . $value);
-        }
-    }
-error_log('NCWI Debug - About to create/get shop user');
-error_log('NCWI Debug - WP User email: ' . ($user ? $user->user_email : 'no user'));
-error_log('NCWI Debug - NC account email: ' . $data['email']);
-error_log('NCWI Debug - NC username: ' . $data['username']);
+        error_log('NCWI Debug - create_nextcloud_account called with data: ' . json_encode($data));
 
+        if (!session_id()) {
+        session_start();
+    }
+    
+    $nc_data = $_SESSION['ncwi_nextcloud_data'] ?? null;
+    $server_url = $nc_data['server'] ?? null;
+    
+    if (!$server_url) {
+        return new WP_Error('missing_server_url', __('Server URL is required for account creation', 'nc-woo-integration'));
+    }
+        
+        // CRITICAL FIX: First check if NC user already exists
+        $nc_user_exists = $this->check_nc_user_exists($data['email'], $server_url);
+        
+        if ($nc_user_exists) {
+            error_log('NCWI: NC user with email ' . $data['email'] . ' already exists in Deployer');
+            
+            // User already exists in NC/Deployer - just link to shop_user
+            $shop_user_id = intval($data['wp_user_id']);
+            
+            // Create or update shop_user
+            $user = get_user_by('id', $data['wp_user_id']);
+            $shop_user_result = $this->create_shop_user([
+                'email' => $data['email'],
+                'wp_user_id' => $data['wp_user_id'],
+                'name' => $user ? $user->display_name : $data['username']
+            ]);
+            
+            if (is_wp_error($shop_user_result)) {
+                error_log('NCWI ERROR: Failed to create shop_user: ' . $shop_user_result->get_error_message());
+                // Continue anyway - NC user exists
+            }
+            
+            // Link existing NC user to shop_user
+            $link_endpoint = $this->deployer_api_url . '/api/shop-users/link/';
+            $link_body = [
+                'shop_user_id' => $shop_user_id,
+                'user_id' => $data['email'], // NC email as user_id
+                'server_url' => $this->nextcloud_api_url
+            ];
+            
+            $link_response = $this->make_deployer_request('POST', $link_endpoint, $link_body);
+            
+            if (!is_wp_error($link_response)) {
+                error_log('NCWI: Successfully linked existing NC user to shop_user');
+            } else {
+                error_log('NCWI: Failed to link NC user to shop_user: ' . $link_response->get_error_message());
+            }
+            
+            return [
+                'success' => true,
+                'data' => [
+                    'username' => $data['email'],
+                    'email' => $data['email'],
+                    'server' => $this->nextcloud_api_url,
+                    'nc_user_id' => $data['email'],
+                    'existing_user' => true
+                ]
+            ];
+        }
+        
+        // User doesn't exist yet - proceed with creation
+        error_log('NCWI: NC user does not exist yet, proceeding with creation');
+        
         // First ensure shop user exists
         $user = get_user_by('id', $data['wp_user_id']);
         $shop_user_result = $this->create_shop_user([
@@ -129,30 +229,28 @@ error_log('NCWI Debug - NC username: ' . $data['username']);
             'name' => $user ? $user->display_name : $data['username']
         ]);
         
-       if (is_wp_error($shop_user_result) && $shop_user_result->get_error_code() !== 'shop_user_exists') {
-    return $shop_user_result;
-}
+        if (is_wp_error($shop_user_result) && $shop_user_result->get_error_code() !== 'shop_user_exists') {
+            return $shop_user_result;
+        }
         
         // Get shop_user_id as integer
         $shop_user_id = intval($data['wp_user_id']);
-
-    
         
+        // Check if account is already active locally
         global $wpdb;
-    $existing_active = $wpdb->get_row($wpdb->prepare(
-        "SELECT * FROM {$wpdb->prefix}ncwi_accounts 
-         WHERE user_id = %d AND status = 'active' AND nc_email = %s",
-        $data['wp_user_id'],
-        $data['email']
-    ));
-    
-    // Als account al active is (vanaf Nextcloud), skip verificatie
-    if (!$existing_active) {
-            // Check if email is verified - include email parameter
+        $existing_active = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$wpdb->prefix}ncwi_accounts 
+             WHERE user_id = %d AND status = 'active' AND nc_email = %s",
+            $data['wp_user_id'],
+            $data['email']
+        ));
+        
+        // If account is already active locally, skip verification
+        if (!$existing_active) {
+            // Check email verification
             $verification_status = $this->check_email_verification($shop_user_id, $data['email']);
             
             if (is_wp_error($verification_status)) {
-                // If check fails, try to send verification email
                 error_log('NCWI: Email verification check failed: ' . $verification_status->get_error_message());
                 
                 // Send verification email
@@ -165,16 +263,6 @@ error_log('NCWI Debug - NC username: ' . $data['username']);
                             'status' => 'pending_verification',
                             'message' => __('Een verificatie email is verstuurd naar ' . $data['email'] . '. Controleer je inbox en klik op de verificatie link.', 'nc-woo-integration'),
                             'verification_sent' => true
-                        ]
-                    ];
-                } else {
-                    return [
-                        'success' => false,
-                        'data' => [
-                            'status' => 'pending_verification',
-                            'message' => __('Email verificatie is vereist maar de verificatie email kon niet worden verstuurd. Neem contact op met de beheerder.', 'nc-woo-integration'),
-                            'verification_sent' => false,
-                            'error' => $verify_result->get_error_message()
                         ]
                     ];
                 }
@@ -191,42 +279,22 @@ error_log('NCWI Debug - NC username: ' . $data['username']);
                             'verification_sent' => true
                         ]
                     ];
-                } else {
-                    return [
-                        'success' => false,
-                        'data' => [
-                            'status' => 'pending_verification',
-                            'message' => __('Email verificatie is vereist maar de verificatie email kon niet worden verstuurd. Neem contact op met de beheerder.', 'nc-woo-integration'),
-                            'verification_sent' => false,
-                            'error' => $verify_result->get_error_message()
-                        ]
-                    ];
                 }
             }
         }
         
-
-        error_log('NCWI Debug - Creating NC user with:');
-error_log('NCWI Debug - shop_user_id: ' . $shop_user_id);
-error_log('NCWI Debug - email for NC: ' . sanitize_email($data['email']));
-error_log('NCWI Debug - username for NC: ' . ($data['username'] ?? 'not set'));
-        // Try to create NC user (only if verified or skip is enabled)
+        // Create NC user
         $endpoint = $this->deployer_api_url . '/api/users/';
         
         // Generate a secure password
-        $password = $this->generate_nextcloud_password(16); 
-        error_log('NCWI Debug - Generated password: ' . $password);
+        $password = $this->generate_nextcloud_password(16);
+        
         $body = [
             'shop_user_id' => $shop_user_id,
             'email' => sanitize_email($data['email']),
-            'username' => $data['username'] ?? $data['email'], 
+            'username' => $data['username'] ?? $data['email'],
             'password' => $password
         ];
-
-        error_log('NCWI Debug - shop_user_id before body: ' . $shop_user_id);
-error_log('NCWI Debug - Body to send to API: ' . json_encode($body));
-
-
         
         $response = $this->make_deployer_request('POST', $endpoint, $body);
         
@@ -237,13 +305,9 @@ error_log('NCWI Debug - Body to send to API: ' . json_encode($body));
         $response_code = wp_remote_retrieve_response_code($response);
         $response_body = wp_remote_retrieve_body($response);
         $result = json_decode($response_body, true);
-
-        error_log('NCWI Debug - API Response Code: ' . $response_code);
-error_log('NCWI Debug - API Response Body: ' . $response_body);
         
         // Check for email verification error
         if ($response_code === 400 && isset($result['error']) && $result['error'] === 'Email not verified') {
-            // Try to send verification email now
             $verify_result = $this->send_email_verification($shop_user_id, $data['email']);
             
             if (!is_wp_error($verify_result)) {
@@ -253,15 +317,6 @@ error_log('NCWI Debug - API Response Body: ' . $response_body);
                         'status' => 'pending_verification',
                         'message' => __('Een verificatie email is verstuurd naar ' . $data['email'] . '. Controleer je inbox en klik op de verificatie link.', 'nc-woo-integration'),
                         'verification_sent' => true
-                    ]
-                ];
-            } else {
-                return [
-                    'success' => false,
-                    'data' => [
-                        'status' => 'pending_verification',
-                        'message' => __('Email verificatie is vereist. De beheerder moet de email verificatie in Deployer uitschakelen voor testing.', 'nc-woo-integration'),
-                        'verification_required' => true
                     ]
                 ];
             }
@@ -305,7 +360,12 @@ error_log('NCWI Debug - API Response Body: ' . $response_body);
      * Link existing Nextcloud account to WP user
      */
     public function link_existing_account($data) {
-        // First ensure shop user exists
+        // For existing NC users (like trial users upgrading)
+        // We only need to create/update the shop_user and link them
+        
+        $shop_user_id = intval($data['wp_user_id']);
+        
+        // Create or get shop_user
         $user = get_user_by('id', $data['wp_user_id']);
         $shop_user_result = $this->create_shop_user([
             'email' => $data['nc_email'],
@@ -317,14 +377,12 @@ error_log('NCWI Debug - API Response Body: ' . $response_body);
             return $shop_user_result;
         }
         
-        $shop_user_id = intval($data['wp_user_id']);
-        
-        // Link the NC user
+        // Link the existing NC user to shop_user
         $endpoint = $this->deployer_api_url . '/api/shop-users/link/';
         
         $body = [
             'shop_user_id' => $shop_user_id,
-            'user_id' => sanitize_user($data['nc_username']), // NC username
+            'user_id' => $data['nc_email'], // Use email as user_id for NC
             'server_url' => $data['server_url'] ?? $this->nextcloud_api_url
         ];
         
@@ -332,6 +390,12 @@ error_log('NCWI Debug - API Response Body: ' . $response_body);
         
         if (is_wp_error($response)) {
             return $response;
+        }
+        
+        $response_code = wp_remote_retrieve_response_code($response);
+        if ($response_code !== 200 && $response_code !== 201) {
+            $error_body = json_decode(wp_remote_retrieve_body($response), true);
+            return new WP_Error('link_failed', $error_body['error'] ?? 'Failed to link account');
         }
         
         return json_decode(wp_remote_retrieve_body($response), true);
@@ -392,11 +456,15 @@ error_log('NCWI Debug - API Response Body: ' . $response_body);
      */
     public function update_user_quota($nc_user_id, $quota, $server_url = null) {
         $endpoint = $this->deployer_api_url . '/api/subscriptions/update/';
+
+        if (empty($server_url)) {
+        return new WP_Error('missing_server_url', __('Server URL is required', 'nc-woo-integration'));
+    }
         
         $body = [
             'user_id' => $nc_user_id,
             'quota' => $quota,
-            'server_url' => $server_url ?? $this->nextcloud_api_url
+            'server_url' => $server_url
         ];
         
         $response = $this->make_deployer_request('PUT', $endpoint, $body);
@@ -429,73 +497,53 @@ error_log('NCWI Debug - API Response Body: ' . $response_body);
         return json_decode(wp_remote_retrieve_body($response), true);
     }
     
-/**
- * Update user group - moves user between TGC groups
- * This method is called when subscription status changes
- */
-public function update_user_group($nc_user_id, $new_group, $server_url = null) {
-    // Define TGC groups
-    $tgc_groups = [
-        'paid' => 'tgcusers_paid',
-        'trial' => 'tgcusers_trial',
-        'unsubscribed' => 'tgcusers_unsubscribed'
-    ];
-    
-    // Validate group
-    if (!isset($tgc_groups[$new_group])) {
-        return new WP_Error('invalid_group', __('Invalid group specified', 'nc-woo-integration'));
+    /**
+     * Update user group - moves user between TGC groups
+     * This method is called when subscription status changes
+     */
+    public function update_user_group($nc_user_id, $new_group, $server_url = null) {
+        // Define TGC groups
+        $tgc_groups = [
+            'paid' => 'tgcusers_paid',
+            'trial' => 'tgcusers_trial',
+            'unsubscribed' => 'tgcusers_unsubscribed'
+        ];
+
+        if (empty($server_url)) {
+        return new WP_Error('missing_server_url', __('Server URL is required', 'nc-woo-integration'));
     }
-    
-    $target_group = $tgc_groups[$new_group];
-    $server_url = $server_url ?? $this->nextcloud_api_url;
-    
-    // First, remove user from all TGC groups
-    foreach ($tgc_groups as $group_key => $group_name) {
-        if ($group_key !== $new_group) {
-            $this->remove_user_from_group($nc_user_id, $server_url, $group_name);
+        
+        // Validate group
+        if (!isset($tgc_groups[$new_group])) {
+            return new WP_Error('invalid_group', __('Invalid group specified', 'nc-woo-integration'));
         }
-    }
-    
-    // Now add user to the target group
-    $add_result = $this->add_user_to_group($nc_user_id, $server_url, $target_group);
-    
-    if (is_wp_error($add_result)) {
-        error_log(sprintf(
-            'NCWI ERROR: Failed to add user %s to group %s: %s',
-            $nc_user_id,
-            $target_group,
-            $add_result->get_error_message()
-        ));
+        
+        $target_group = $tgc_groups[$new_group];
+        $server_url = $server_url;
+        
+        // First, remove user from all TGC groups
+        foreach ($tgc_groups as $group_key => $group_name) {
+            if ($group_key !== $new_group) {
+                $this->remove_user_from_group($nc_user_id, $server_url, $group_name);
+            }
+        }
+        
+        // Now add user to the target group
+        $add_result = $this->add_user_to_group($nc_user_id, $server_url, $target_group);
+        
+        if (is_wp_error($add_result)) {
+            error_log(sprintf(
+                'NCWI ERROR: Failed to add user %s to group %s: %s',
+                $nc_user_id,
+                $target_group,
+                $add_result->get_error_message()
+            ));
+            return $add_result;
+        }
+        
         return $add_result;
     }
     
-    return $add_result;
-}
-
-/**
- * Update user status (enable/disable)
- */
-
-/*
-public function update_user_status($nc_user_id, $enabled = true, $server_url = null) {
-    $endpoint = $this->deployer_api_url . '/api/users/status/';
-    
-    $body = [
-        'user_id' => $nc_user_id,
-        'server_url' => $server_url ?? $this->nextcloud_api_url,
-        'enabled' => $enabled
-    ];
-    
-    $response = $this->make_deployer_request('PUT', $endpoint, $body);
-    
-    if (is_wp_error($response)) {
-        return $response;
-    }
-    
-    return json_decode(wp_remote_retrieve_body($response), true);
-}
-*/
-
     /**
      * Unsubscribe user (deactivate subscription)
      */
@@ -580,93 +628,65 @@ public function update_user_status($nc_user_id, $enabled = true, $server_url = n
     }
     
     /**
-     * Verify Nextcloud email >> remove, verification is send from deployer
+     * Verify email token with Deployer
      */
-    public function verify_nextcloud_email($nc_user_id, $verification_token) {
-        $endpoint = $this->nextcloud_api_url . '/ocs/v2.php/apps/registration/verify/' . $verification_token;
+    public function verify_deployer_email_token($token) {
+        $endpoint = $this->deployer_api_url . '/api/email/verification/verify/' . $token . '/';
         
-        $response = wp_remote_get($endpoint, [
-            'headers' => [
-                'OCS-APIRequest' => 'true',
-                'Accept' => 'application/json'
-            ],
-            'timeout' => 30
-        ]);
+        $response = $this->make_deployer_request('GET', $endpoint);
         
         if (is_wp_error($response)) {
             return $response;
         }
         
-        return json_decode(wp_remote_retrieve_body($response), true);
+        $response_code = wp_remote_retrieve_response_code($response);
+        
+        if ($response_code !== 200) {
+            return new WP_Error('verification_failed', __('Verificatie token ongeldig of verlopen', 'nc-woo-integration'));
+        }
+        
+        return true;
     }
-
+    
     /**
- * Verify email token with Deployer
- */
-public function verify_deployer_email_token($token) {
-    $endpoint = $this->deployer_api_url . '/api/email/verification/verify/' . $token . '/';
-    
-    $response = $this->make_deployer_request('GET', $endpoint);
-    
-    if (is_wp_error($response)) {
-        return $response;
+     * Generate a password that meets Nextcloud requirements
+     * At least 1 uppercase, 1 lowercase, 1 number, 1 special character
+     */
+    private function generate_nextcloud_password($length = 16) {
+        $uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        $lowercase = 'abcdefghijklmnopqrstuvwxyz';
+        $numbers = '0123456789';
+        $special = '!@#$%^&*()_+-=[]{}|;:,.<>?';
+        
+        // Ensure at least one of each type
+        $password = '';
+        $password .= $uppercase[random_int(0, strlen($uppercase) - 1)];
+        $password .= $lowercase[random_int(0, strlen($lowercase) - 1)];
+        $password .= $numbers[random_int(0, strlen($numbers) - 1)];
+        $password .= $special[random_int(0, strlen($special) - 1)];
+        
+        // Fill the rest randomly
+        $all_chars = $uppercase . $lowercase . $numbers . $special;
+        for ($i = 4; $i < $length; $i++) {
+            $password .= $all_chars[random_int(0, strlen($all_chars) - 1)];
+        }
+        
+        // Shuffle the password so required chars aren't always at the start
+        return str_shuffle($password);
     }
-    
-    $response_code = wp_remote_retrieve_response_code($response);
-    
-    if ($response_code !== 200) {
-        return new WP_Error('verification_failed', __('Verificatie token ongeldig of verlopen', 'nc-woo-integration'));
-    }
-    
-    return true;
-}
-
-/**
- * Generate a password that meets Nextcloud requirements
- * At least 1 uppercase, 1 lowercase, 1 number, 1 special character
- */
-private function generate_nextcloud_password($length = 16) {
-    $uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-    $lowercase = 'abcdefghijklmnopqrstuvwxyz';
-    $numbers = '0123456789';
-    $special = '!@#$%^&*()_+-=[]{}|;:,.<>?';
-    
-    // Ensure at least one of each type
-    $password = '';
-    $password .= $uppercase[random_int(0, strlen($uppercase) - 1)];
-    $password .= $lowercase[random_int(0, strlen($lowercase) - 1)];
-    $password .= $numbers[random_int(0, strlen($numbers) - 1)];
-    $password .= $special[random_int(0, strlen($special) - 1)];
-    
-    // Fill the rest randomly
-    $all_chars = $uppercase . $lowercase . $numbers . $special;
-    for ($i = 4; $i < $length; $i++) {
-        $password .= $all_chars[random_int(0, strlen($all_chars) - 1)];
-    }
-    
-    // Shuffle the password so required chars aren't always at the start
-    return str_shuffle($password);
-}
     
     /**
      * Make authenticated request to Deployer API
      */
     private function make_deployer_request($method, $url, $body = null) {
-        // Try different authentication methods based on what the API expects
         $headers = [
             'Content-Type' => 'application/json',
         ];
         
-        // Method 1: API-KEY header (zoals in de oude plugin)
+        // Method 1: API-KEY header (as in old plugin)
         if ($this->deployer_api_key) {
             $headers['API-KEY'] = $this->deployer_api_key;
         }
-        
-        // Method 2: Also try Authorization Bearer
-        // $headers['Authorization'] = 'Bearer ' . $this->deployer_api_key;
-        
-        // Method 3: Or try X-API-Key
-        // $headers['X-API-Key'] = $this->deployer_api_key;
         
         $args = [
             'method' => $method,
@@ -679,15 +699,6 @@ private function generate_nextcloud_password($length = 16) {
             $args['body'] = wp_json_encode($body);
         }
         
-        // Enhanced debug logging
-        /*if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('NCWI API Request: ' . $method . ' ' . $url);
-            error_log('NCWI API Headers: ' . print_r($headers, true));
-            if ($body) {
-                error_log('NCWI API Body: ' . print_r($body, true));
-            }
-        }*/
-        
         $response = wp_remote_request($url, $args);
         
         // Enhanced response logging
@@ -698,7 +709,9 @@ private function generate_nextcloud_password($length = 16) {
                 $response_code = wp_remote_retrieve_response_code($response);
                 $response_body = wp_remote_retrieve_body($response);
                 error_log('NCWI API Response Code: ' . $response_code);
-                error_log('NCWI API Response Body: ' . $response_body);
+                if ($response_code !== 200 && $response_code !== 201) {
+                    error_log('NCWI API Response Body: ' . $response_body);
+                }
             }
         }
         
@@ -709,48 +722,6 @@ private function generate_nextcloud_password($length = 16) {
      * Validate API configuration
      */
     public function validate_configuration() {
-
         return true; 
-
-        $errors = [];
-        
-        if (empty($this->deployer_api_url)) {
-            $errors[] = __('Deployer API URL is niet geconfigureerd', 'nc-woo-integration');
-        }
-        
-        if (empty($this->deployer_api_key)) {
-            $errors[] = __('Deployer API Key is niet geconfigureerd', 'nc-woo-integration');
-        }
-        
-        if (empty($this->nextcloud_api_url)) {
-            $errors[] = __('Nextcloud API URL is niet geconfigureerd', 'nc-woo-integration');
-        }
-        
-        if (!empty($errors)) {
-            return new WP_Error('ncwi_config_error', implode(', ', $errors));
-        }
-        
-        // Test API connection with servers endpoint 
-        $test_response = $this->make_deployer_request('GET', $this->deployer_api_url . '/api/servers/');
-        
-        if (is_wp_error($test_response)) {
-            return new WP_Error('ncwi_connection_error', __('Kan geen verbinding maken met Deployer API', 'nc-woo-integration'));
-        }
-        
-        $response_code = wp_remote_retrieve_response_code($test_response);
-        
-        // 200 means success
-        if ($response_code === 200) {
-            return true;
-        }
-        
-        // 401/403 means API works but auth failed
-        if ($response_code === 401 || $response_code === 403) {
-            return new WP_Error('ncwi_auth_error', __('Deployer API authenticatie mislukt - controleer je API key', 'nc-woo-integration'));
-        }
-        
-        // Other error
-        return new WP_Error('ncwi_api_error', sprintf(__('Deployer API returned status code %d', 'nc-woo-integration'), $response_code));
     }
-    
 }

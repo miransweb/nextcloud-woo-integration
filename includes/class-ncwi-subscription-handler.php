@@ -155,7 +155,11 @@ class NCWI_Subscription_Handler {
         error_log('NCWI: Processing linked account - NC User: ' . $account['nc_user_id']);
         
         // Move from trial to paid group
-        $group_result = $this->api->update_user_group($account['nc_user_id'], 'paid');
+       $group_result = $this->api->update_user_group(
+    $account['nc_email'], 
+    'paid', 
+    $account['nc_server'] 
+);
         
         if (is_wp_error($group_result)) {
             error_log('NCWI ERROR: Failed to update user group: ' . $group_result->get_error_message());
@@ -167,7 +171,11 @@ class NCWI_Subscription_Handler {
         $quota = $this->get_subscription_quota($subscription);
         error_log('NCWI: Setting quota to: ' . $quota);
         
-        $quota_result = $this->api->update_user_quota($account['nc_user_id'], $quota);
+        $quota_result = $this->api->update_user_quota(
+    $account['nc_email'], 
+    $quota,
+    $account['nc_server'] 
+);
         
         if (is_wp_error($quota_result)) {
             error_log('NCWI ERROR: Failed to update quota: ' . $quota_result->get_error_message());
@@ -420,14 +428,14 @@ class NCWI_Subscription_Handler {
        // $this->api->update_user_status($account['nc_user_id'], true);
         
         // Update quota
-        $quota = $this->get_subscription_quota($subscription);
-        $this->api->update_user_quota($account['nc_user_id'], $quota);
+       $quota = $this->get_subscription_quota($subscription);
+    $this->api->update_user_quota($account['nc_email'], $quota, $account['nc_server']);
         
         // Move to paid group
-        $this->api->update_user_group($account['nc_user_id'], 'paid');
+       $this->api->update_user_group($account['nc_email'], 'paid', $account['nc_server']);
         
         // Update local status
-        $this->update_account_subscription_status($account['id'], $subscription->get_id(), 'active');
+       $this->update_account_subscription_status($account['id'], $subscription->get_id(), 'active');
     }
     
     /**
@@ -435,7 +443,7 @@ class NCWI_Subscription_Handler {
      */
     private function deactivate_subscription($account, $subscription) {
     // Move user from paid to unsubscribed group
-    $this->api->update_user_group($account['nc_user_id'], 'unsubscribed');
+    $this->api->update_user_group($account['nc_email'], 'unsubscribed', $account['nc_server']);
     
     // Update local status
     $this->update_account_subscription_status($account['id'], $subscription->get_id(), 'inactive');

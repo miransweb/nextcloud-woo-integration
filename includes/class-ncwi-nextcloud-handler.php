@@ -28,11 +28,13 @@ class NCWI_Nextcloud_Handler {
         
         // Shortcode for signup with NC data
         add_shortcode('nextcloud_signup_handler', [$this, 'render_signup_handler']);
+        
         // Hook voor redirect na login
-    add_action('wp_login', [$this, 'check_nextcloud_redirect_after_login'], 10, 2);
-         // Clear NC session data on logout
-    add_action('wp_logout', [$this, 'clear_nextcloud_session']);
-    add_action('clear_auth_cookie', [$this, 'clear_nextcloud_session']);
+        add_action('wp_login', [$this, 'check_nextcloud_redirect_after_login'], 10, 2);
+        
+        // Clear NC session data on logout
+        add_action('wp_logout', [$this, 'clear_nextcloud_session']);
+        add_action('clear_auth_cookie', [$this, 'clear_nextcloud_session']);
     }
     
     /**
@@ -52,10 +54,6 @@ class NCWI_Nextcloud_Handler {
      * Handle incoming redirect from Nextcloud
      */
     public function handle_nextcloud_redirect() {
-if (isset($_GET['debug_params'])) {
-        wp_die('<pre>GET params: ' . print_r($_GET, true) . '</pre>');
-    }
-
         if (!isset($_GET['nc_server']) || !isset($_GET['signature'])) {
             return;
         }
@@ -79,36 +77,74 @@ if (isset($_GET['debug_params'])) {
         ];
 
         if (is_user_logged_in()) {
-        $current_user_id = get_current_user_id();
-        $nc_data = $_SESSION['ncwi_nextcloud_data'];
-        
-        // Check of dit NC account al gekoppeld is aan deze gebruiker
-        global $wpdb;
-        $existing = $wpdb->get_row($wpdb->prepare(
-            "SELECT * FROM {$wpdb->prefix}ncwi_accounts 
-             WHERE user_id = %d AND nc_user_id = %s AND nc_server = %s",
-            $current_user_id,
-            $nc_data['user_id'],
-            $nc_data['server']
-        ));
-        
-        if (!$existing) {
-            // Voeg het NC account toe aan de huidige gebruiker
-            $wpdb->insert(
-                $wpdb->prefix . 'ncwi_accounts',
-                [
-                    'user_id' => $current_user_id,
-                    'nc_username' => $nc_data['user_id'],
-                    'nc_email' => $nc_data['email'],
-                    'nc_server' => $nc_data['server'],
-                    'nc_user_id' => $nc_data['user_id'],
-                    'status' => 'active' // Already verified in NC
-                ]
-            );
+            $current_user_id = get_current_user_id();
+            $nc_data = $_SESSION['ncwi_nextcloud_data'];
             
-            error_log('NCWI: Added Nextcloud account ' . $nc_data['user_id'] . ' to existing user ' . $current_user_id);
+            // IMPROVED: Better check for existing NC accounts
+            global $wpdb;
+            $existing = $wpdb->get_row($wpdb->prepare(
+                "SELECT * FROM {$wpdb->prefix}ncwi_accounts 
+                 WHERE nc_user_id = %s AND nc_server = %s
+                 ORDER BY created_at DESC
+                 LIMIT 1",
+                $nc_data['user_id'],
+                $nc_data['server']
+            ));
+            
+            if ($existing) {
+                // Account exists - UPDATE if needed
+                if ($existing->user_id != $current_user_id || $existing->status !== 'active') {
+                    $wpdb->update(
+                        $wpdb->prefix . 'ncwi_accounts',
+                        [
+                            'user_id' => $current_user_id,
+                            'status' => 'active',
+                            'updated_at' => current_time('mysql')
+                        ],
+                        ['id' => $existing->id],
+                        ['%d', '%s', '%s'],
+                        ['%d']
+                    );
+                    error_log('NCWI: Updated existing NC account ' . $nc_data['user_id'] . ' to WP user ' . $current_user_id);
+                }
+                $_SESSION['ncwi_existing_account_id'] = $existing->id;
+            } else {
+                // Only create if really doesn't exist
+                $result = $wpdb->insert(
+                    $wpdb->prefix . 'ncwi_accounts',
+                    [
+                        'user_id' => $current_user_id,
+                        'nc_username' => $nc_data['user_id'],
+                        'nc_email' => $nc_data['email'],
+                        'nc_server' => $nc_data['server'],
+                        'nc_user_id' => $nc_data['user_id'],
+                        'status' => 'active',
+                        'created_at' => current_time('mysql'),
+                        'updated_at' => current_time('mysql')
+                    ]
+                );
+                
+                if ($result) {
+                    $_SESSION['ncwi_existing_account_id'] = $wpdb->insert_id;
+                    error_log('NCWI: Created new NC account ' . $nc_data['user_id'] . ' for WP user ' . $current_user_id);
+                    
+                    // Link NC user to shop_user in Deployer
+                    $api = NCWI_API::get_instance();
+                    $link_result = $api->link_existing_account([
+                        'nc_username' => $nc_data['email'],
+                        'nc_email' => $nc_data['email'],
+                        'wp_user_id' => $current_user_id,
+                        'server_url' => $nc_data['server']
+                    ]);
+                    
+                    if (is_wp_error($link_result)) {
+                        error_log('NCWI ERROR: Failed to link NC user to shop_user: ' . $link_result->get_error_message());
+                    } else {
+                        error_log('NCWI: Successfully linked NC user to shop_user in Deployer');
+                    }
+                }
+            }
         }
-    }
         
         // Redirect based on action
         if ($_GET['action'] === 'manage' && is_user_logged_in()) {
@@ -116,30 +152,30 @@ if (isset($_GET['debug_params'])) {
             wp_redirect(wc_get_account_endpoint_url('subscriptions'));
             exit;
         } elseif ($_GET['action'] === 'subscribe') {
-        // Trial gebruiker - ga direct naar productpagina
-        // WooCommerce handelt login/registratie af tijdens checkout
-        wp_redirect(home_url('/product/personalstorage-subscription/'));
-        exit;
-    } else {
-        // Als manage maar niet ingelogd, stuur naar login
-        wp_redirect(wc_get_page_permalink('myaccount'));
-        exit;
-    }
-    }
-    
-  public function check_nextcloud_redirect_after_login($user_login, $user) {
-    if (!session_id()) {
-        session_start();
+            // Trial user - go directly to product page
+            // WooCommerce handles login/registration during checkout
+            wp_redirect(home_url('/product/personalstorage-subscription/'));
+            exit;
+        } else {
+            // If manage but not logged in, send to login
+            wp_redirect(wc_get_page_permalink('myaccount'));
+            exit;
+        }
     }
     
-    $nc_data = $_SESSION['ncwi_nextcloud_data'] ?? null;
-    
-    if ($nc_data && $nc_data['action'] === 'manage') {
-        // Na login voor manage actie, redirect naar subscriptions
-        wp_redirect(wc_get_account_endpoint_url('subscriptions'));
-        exit;
+    public function check_nextcloud_redirect_after_login($user_login, $user) {
+        if (!session_id()) {
+            session_start();
+        }
+        
+        $nc_data = $_SESSION['ncwi_nextcloud_data'] ?? null;
+        
+        if ($nc_data && $nc_data['action'] === 'manage') {
+            // After login for manage action, redirect to subscriptions
+            wp_redirect(wc_get_account_endpoint_url('subscriptions'));
+            exit;
+        }
     }
-}
 
     /**
      * Process Nextcloud user
@@ -181,29 +217,64 @@ if (isset($_GET['debug_params'])) {
     private function link_nextcloud_account($user_id, $nc_data) {
         global $wpdb;
         
-        // Check if already linked
+        // IMPROVED: Better check for existing accounts
         $existing = $wpdb->get_row($wpdb->prepare(
             "SELECT * FROM {$wpdb->prefix}ncwi_accounts 
-             WHERE user_id = %d AND nc_user_id = %s AND nc_server = %s",
-            $user_id,
+             WHERE nc_user_id = %s AND nc_server = %s
+             ORDER BY created_at DESC
+             LIMIT 1",
             $nc_data['user_id'],
             $nc_data['server']
         ));
         
         if (!$existing) {
-            // Link the account
+            // Fallback: check by email
+            $existing = $wpdb->get_row($wpdb->prepare(
+                "SELECT * FROM {$wpdb->prefix}ncwi_accounts 
+                 WHERE nc_email = %s AND nc_server = %s
+                 ORDER BY created_at DESC
+                 LIMIT 1",
+                $nc_data['email'],
+                $nc_data['server']
+            ));
+        }
+        
+        if ($existing) {
+            // Update existing account
+            $wpdb->update(
+                $wpdb->prefix . 'ncwi_accounts',
+                [
+                    'user_id' => $user_id,
+                    'status' => 'active',
+                    'updated_at' => current_time('mysql')
+                ],
+                ['id' => $existing->id]
+            );
+        } else {
+            // Create new account
             $wpdb->insert(
                 $wpdb->prefix . 'ncwi_accounts',
                 [
                     'user_id' => $user_id,
-                    'nc_username' => $nc_data['user_id'], // NC uses user_id as username
+                    'nc_username' => $nc_data['user_id'],
                     'nc_email' => $nc_data['email'],
                     'nc_server' => $nc_data['server'],
                     'nc_user_id' => $nc_data['user_id'],
-                    'status' => 'active' // Already verified in NC
+                    'status' => 'active',
+                    'created_at' => current_time('mysql'),
+                    'updated_at' => current_time('mysql')
                 ]
             );
         }
+        
+        // Link to shop_user in Deployer
+        $api = NCWI_API::get_instance();
+        $api->link_existing_account([
+            'nc_username' => $nc_data['email'],
+            'nc_email' => $nc_data['email'],
+            'wp_user_id' => $user_id,
+            'server_url' => $nc_data['server']
+        ]);
     }
     
     /**
@@ -211,52 +282,58 @@ if (isset($_GET['debug_params'])) {
      */
     private function verify_signature($params) {
         $shared_secret = trim(get_option('ncwi_shared_secret', ''));
-        if (empty($shared_secret)) {
+        
+        if (empty($shared_secret) || !isset($params['signature'])) {
             return false;
         }
-
-        if (empty($shared_secret) || !isset($params['signature'])) {
-        return false;
-    }
-$signature = $params['signature'];
-    $nextcloud_params = [];
-      $expected_params = ['nc_server', 'nc_user_id', 'nc_email', 'nc_display_name', 'action'];
-    
-    foreach ($expected_params as $param) {
-        if (isset($params[$param])) {
-            $nextcloud_params[$param] = $params[$param];
+        
+        $signature = $params['signature'];
+        $nextcloud_params = [];
+        $expected_params = ['nc_server', 'nc_user_id', 'nc_email', 'nc_display_name', 'action'];
+        
+        foreach ($expected_params as $param) {
+            if (isset($params[$param])) {
+                $nextcloud_params[$param] = $params[$param];
+            }
         }
-    }
-    
-    // Sort params
-    ksort($nextcloud_params);
+        
+        // Sort params 
+        ksort($nextcloud_params);
         
         // Generate signature
-       $data_string = http_build_query($nextcloud_params, '', '&', PHP_QUERY_RFC3986);
-    
-    // calculate expected signature
-    $expected_signature = hash_hmac('sha256', $data_string, $shared_secret);
+        $data_string = http_build_query($nextcloud_params, '', '&', PHP_QUERY_RFC3986);
+        
+        // Calculate expected signature
+        $expected_signature = hash_hmac('sha256', $data_string, $shared_secret);
 
-    return hash_equals($expected_signature, $signature);
+        return hash_equals($expected_signature, $signature);
     }
 
     /**
- * Clear Nextcloud session data on logout
- */
-public function clear_nextcloud_session() {
-    if (!session_id()) {
-        session_start();
+     * Clear Nextcloud session data on logout
+     */
+    public function clear_nextcloud_session() {
+        if (!session_id()) {
+            session_start();
+        }
+        
+        if (isset($_SESSION['ncwi_nextcloud_data'])) {
+            unset($_SESSION['ncwi_nextcloud_data']);
+        }
+        
+        if (isset($_SESSION['ncwi_new_account_id'])) {
+            unset($_SESSION['ncwi_new_account_id']);
+        }
+        
+        if (isset($_SESSION['ncwi_existing_account_id'])) {
+            unset($_SESSION['ncwi_existing_account_id']);
+        }
+        
+        // Destroy session if empty
+        if (empty($_SESSION)) {
+            session_destroy();
+        }
     }
-    
-    if (isset($_SESSION['ncwi_nextcloud_data'])) {
-        unset($_SESSION['ncwi_nextcloud_data']);
-    }
-    
-    // Destroy hele sessie als er verder niks in zit
-    if (empty($_SESSION)) {
-        session_destroy();
-    }
-}
     
     /**
      * Render signup handler
