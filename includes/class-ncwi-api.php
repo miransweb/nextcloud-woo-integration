@@ -27,6 +27,8 @@ class NCWI_API {
         $this->deployer_api_key = get_option('ncwi_deployer_api_key');
        // $this->nextcloud_api_url = get_option('ncwi_nextcloud_api_url');
     }
+
+   
     
     /**
      * Create or get shop user
@@ -86,28 +88,28 @@ class NCWI_API {
      * Check if NC user exists
      */
     public function check_nc_user_exists($email_or_userid, $server_url = null) {
-        $endpoint = $this->deployer_api_url . '/api/users/check/';
-        
-        $params = [
-            'user_id' => $email_or_userid,
-            'server_url' => $server_url ?? $this->nextcloud_api_url
-        ];
-        
-        $url = add_query_arg($params, $endpoint);
-        $response = $this->make_deployer_request('GET', $url);
-        
-        if (is_wp_error($response)) {
-            return false;
-        }
-        
-        $response_code = wp_remote_retrieve_response_code($response);
-        if ($response_code === 200) {
-            $data = json_decode(wp_remote_retrieve_body($response), true);
-            return isset($data['exists']) && $data['exists'] === true;
-        }
-        
+    $endpoint = $this->deployer_api_url . '/api/users/quota/';  
+    
+    $params = [
+        'user_id' => $email_or_userid,
+        'server_url' => $server_url
+    ];
+    
+    $url = add_query_arg($params, $endpoint);
+    $response = $this->make_deployer_request('GET', $url);
+    
+    if (is_wp_error($response)) {
         return false;
     }
+    
+    $response_code = wp_remote_retrieve_response_code($response);
+    if ($response_code === 200) {
+        // User exists if we get a 200 response from quota endpoint
+        return true;  
+    }
+    
+    return false;
+}
     
     /**
      * Send email verification
